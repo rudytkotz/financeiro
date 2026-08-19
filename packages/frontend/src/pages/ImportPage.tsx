@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { FileUpload } from '../components/FileUpload'
-import { parseCsv, type CsvParseResult } from '../lib/parseCsv'
+import { parseCsv, type CsvParseResult, type ParsedTransaction } from '../lib/parseCsv'
 import { useImportCsv, type ImportCsvPayload } from '../hooks/useMutations'
 import { useCategories } from '../hooks/useCategories'
+import { useDependents } from '../hooks/useDependents'
 import { AxiosError } from 'axios'
+import { Pencil, Trash2, Check, X } from 'lucide-react'
 
 function formatCurrency(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', {
@@ -12,11 +14,38 @@ function formatCurrency(cents: number): string {
   })
 }
 
+function formatCurrencyInput(cents: number): string {
+  return (cents / 100).toFixed(2).replace('.', ',')
+}
+
+function parseCurrencyInput(value: string): number | null {
+  const cleaned = value.replace(/\s/g, '').replace(/R\$\s*/, '')
+  const normalized = cleaned.replace(/\./g, '').replace(',', '.')
+  const num = Number(normalized)
+  if (isNaN(num) || num <= 0) return null
+  return Math.round(num * 100)
+}
+
+interface EditableTransaction extends ParsedTransaction {
+  _id: number // internal key for react
+}
+
 export default function ImportPage() {
   const [parseResult, setParseResult] = useState<CsvParseResult | null>(null)
+  const [editableTransactions, setEditableTransactions] = useState<EditableTransaction[]>([])
   const [fileError, setFileError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorsExpanded, setErrorsExpanded] = useState(false)
+
+  // Editing state
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState<{
+    date: string
+    description: string
+    amount: string
+    portador: string
+    installment: string
+  }>({ date: '', description: '', amount: '', portador: '', installment: '' })
 
   // Import flow state
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -25,6 +54,7 @@ export default function ImportPage() {
 
   const importCsv = useImportCsv()
   const { data: categories } = useCategories()
+  const { data: dependents } = useDependents()
 
   const getDefaultCategoryId = (): string => {
     if (!categories || categories.length === 0) return ''
@@ -37,7 +67,7 @@ export default function ImportPage() {
   const buildPayload = (force: boolean): ImportCsvPayload => {
     const categoryId = getDefaultCategoryId()
     return {
-      transactions: parseResult!.valid.map((tx) => ({
+      transactions: editableTransactions.map((tx) => ({
         date: tx.date,
         description: tx.description,
         amount: tx.amount,
@@ -56,11 +86,16 @@ export default function ImportPage() {
   const handleFileAccepted = async (file: File) => {
     setFileError(null)
     setParseResult(null)
+    setEditableTransactions([])
     setSuccessMessage(null)
+    setEditingId(null)
     setIsLoading(true)
     try {
       const result = await parseCsv(file)
       setParseResult(result)
+      setEditableTransactions(
+        result.valid.map((tx, idx) => ({ ...tx, _id: idx }))
+      )
     } catch {
       setFileError('Não foi possível processar o arquivo. Verifique se o arquivo está correto e tente novamente.')
     } finally {
@@ -71,11 +106,74 @@ export default function ImportPage() {
   const handleFileError = (message: string) => {
     setFileError(message)
     setParseResult(null)
+    setEditableTransactions([])
     setSuccessMessage(null)
   }
 
+  // --- Editing handlers ---
+
+  const handleStartEdit = useCallback((tx: EditableTransaction) => {
+    setEditingId(tx._id)
+    setEditForm({
+      date: tx.date,
+      description: tx.description,
+      amount: formatCurrencyInput(tx.amount),
+      portador: tx.portador ?? '',
+      installment: tx.installment ?? '',
+    })
+  }, [])
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingId(null)
+  }, [])
+
+  const handleSaveEdit = useCallback(() => {
+    if (editingId === null) return
+
+    const amount = parseCurrencyInput(editForm.amount)
+    if (!amount) return
+    if (!editForm.date || !editForm.description.trim()) return
+
+    // Parse installment
+    let installmentCurrent: number | undefined
+    let installmentTotal: number | undefined
+    let installmentStr: string | undefined
+    if (editForm.installment.trim()) {
+      const match = editForm.installment.trim().match(/^(\d+)\/(\d+)$/)
+      if (match) {
+        installmentCurrent = parseInt(match[1], 10)
+        installmentTotal = parseInt(match[2], 10)
+        installmentStr = editForm.installment.trim()
+      }
+    }
+
+    setEditableTransactions((prev) =>
+      prev.map((tx) =>
+        tx._id === editingId
+          ? {
+              ...tx,
+              date: editForm.date,
+              description: editForm.description.trim(),
+              amount,
+              portador: editForm.portador.trim() || undefined,
+              installment: installmentStr,
+              installmentCurrent,
+              installmentTotal,
+            }
+          : tx
+      )
+    )
+    setEditingId(null)
+  }, [editingId, editForm])
+
+  const handleDeleteRow = useCallback((id: number) => {
+    setEditableTransactions((prev) => prev.filter((tx) => tx._id !== id))
+  }, [])
+
+  // --- Import handlers ---
+
   const handleImport = async () => {
-    if (!parseResult || parseResult.valid.length === 0) return
+    if (editableTransactions.length === 0) return
 
     setIsSubmitting(true)
     setSuccessMessage(null)
@@ -85,6 +183,7 @@ export default function ImportPage() {
       const result = await importCsv.mutateAsync(payload)
       setSuccessMessage(`Importação concluída com sucesso! ${result.transactionCount} transação(ões) importada(s).`)
       setParseResult(null)
+      setEditableTransactions([])
     } catch (error) {
       if (error instanceof AxiosError && error.response?.status === 409) {
         const data = error.response.data
@@ -108,6 +207,7 @@ export default function ImportPage() {
       const result = await importCsv.mutateAsync(payload)
       setSuccessMessage(`Importação concluída com sucesso! ${result.transactionCount} transação(ões) importada(s).`)
       setParseResult(null)
+      setEditableTransactions([])
     } catch {
       setFileError('Ocorreu um erro ao importar as transações. Tente novamente.')
     } finally {
@@ -119,7 +219,7 @@ export default function ImportPage() {
     setDuplicateModal(null)
   }
 
-  const hasValidTransactions = parseResult !== null && parseResult.valid.length > 0
+  const hasValidTransactions = editableTransactions.length > 0
   const allInvalid =
     parseResult !== null &&
     parseResult.valid.length === 0 &&
@@ -188,6 +288,13 @@ export default function ImportPage() {
 
       {hasValidTransactions && (
         <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">
+              {editableTransactions.length} transação(ões) para importar.
+              <span className="ml-2 text-xs text-gray-400">Clique no ícone de editar para alterar antes de importar.</span>
+            </p>
+          </div>
+
           <div className="overflow-x-auto rounded-md border border-gray-200">
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
@@ -197,34 +304,135 @@ export default function ImportPage() {
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Portador</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-700">Valor (R$)</th>
                   <th className="px-4 py-3 text-center font-medium text-gray-700">Parcela</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-700">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {parseResult!.valid.map((tx, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 text-gray-700">{tx.date}</td>
-                    <td className="px-4 py-2 text-gray-700">{tx.description}</td>
-                    <td className="px-4 py-2 text-gray-700">{tx.portador ?? '—'}</td>
-                    <td className="px-4 py-2 text-right text-gray-700">
-                      {formatCurrency(tx.amount)}
-                    </td>
-                    <td className="px-4 py-2 text-center text-gray-700">
-                      {tx.installment ?? '—'}
-                    </td>
+                {editableTransactions.map((tx) => (
+                  <tr key={tx._id} className="hover:bg-gray-50">
+                    {editingId === tx._id ? (
+                      <>
+                        <td className="px-2 py-2">
+                          <input
+                            type="date"
+                            value={editForm.date}
+                            onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            value={editForm.description}
+                            onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            value={editForm.portador}
+                            onChange={(e) => setEditForm((f) => ({ ...f, portador: e.target.value }))}
+                            placeholder="Nome do portador"
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            value={editForm.amount}
+                            onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
+                            placeholder="0,00"
+                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2">
+                          <input
+                            type="text"
+                            value={editForm.installment}
+                            onChange={(e) => setEditForm((f) => ({ ...f, installment: e.target.value }))}
+                            placeholder="1/12"
+                            className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={handleSaveEdit}
+                              className="rounded p-1 text-green-600 hover:bg-green-50"
+                              title="Salvar"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelEdit}
+                              className="rounded p-1 text-gray-500 hover:bg-gray-100"
+                              title="Cancelar"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-2 text-gray-700">{tx.date}</td>
+                        <td className="px-4 py-2 text-gray-700">{tx.description}</td>
+                        <td className="px-4 py-2 text-gray-700">{tx.portador ?? '—'}</td>
+                        <td className="px-4 py-2 text-right text-gray-700">
+                          {formatCurrency(tx.amount)}
+                        </td>
+                        <td className="px-4 py-2 text-center text-gray-700">
+                          {tx.installment ?? '—'}
+                        </td>
+                        <td className="px-4 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(tx)}
+                              className="rounded p-1 text-blue-600 hover:bg-blue-50"
+                              title="Editar"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRow(tx._id)}
+                              className="rounded p-1 text-red-600 hover:bg-red-50"
+                              title="Remover"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setParseResult(null)
+                setEditableTransactions([])
+              }}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Cancelar
+            </button>
             <button
               type="button"
               onClick={handleImport}
-              disabled={isSubmitting}
+              disabled={isSubmitting || editingId !== null}
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {isSubmitting ? 'Importando...' : 'Importar'}
+              {isSubmitting ? 'Importando...' : `Importar ${editableTransactions.length} transação(ões)`}
             </button>
           </div>
         </>

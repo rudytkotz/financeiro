@@ -17,6 +17,9 @@ const sampleTransaction: Transaction = {
   dependentId: null,
   source: 'manual',
   importId: null,
+  portador: null,
+  installmentCurrent: null,
+  installmentTotal: null,
   createdAt: '2024-03-15T10:00:00Z',
   updatedAt: '2024-03-15T10:00:00Z',
 }

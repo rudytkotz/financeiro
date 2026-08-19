@@ -127,6 +127,9 @@ export interface ImportCsvPayload {
     dependentId: string | null
     source: 'csv'
     importId: string | null
+    portador?: string | null
+    installmentCurrent?: number | null
+    installmentTotal?: number | null
   }>
   force?: boolean
 }

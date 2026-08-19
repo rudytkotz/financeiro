@@ -5,6 +5,7 @@ import {
   saveImport,
   overwriteImport,
   listImports,
+  resolvePortadorToDependents,
   type ImportTransaction,
   type ServiceError,
 } from '../services/importService.js'
@@ -148,10 +149,27 @@ const importRoutes: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      // 2. Calcular referenceMonth com calculateReferenceMonth
+      // 2. Resolve portador names to dependent IDs (auto-create if needed)
+      const portadorNames = valid
+        .map((t) => t.portador)
+        .filter((p): p is string => !!p && p.trim().length > 0)
+
+      const portadorMap = await resolvePortadorToDependents(portadorNames)
+
+      // Assign dependentId based on portador name
+      for (const t of valid) {
+        if (t.portador && !t.dependentId) {
+          const depId = portadorMap.get(t.portador.toLowerCase())
+          if (depId) {
+            t.dependentId = depId
+          }
+        }
+      }
+
+      // 3. Calcular referenceMonth com calculateReferenceMonth
       const referenceMonth = calculateReferenceMonth(valid)
 
-      // 3. Se checkDuplicate retorna true e force !== true → retornar 409
+      // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth)
       if (isDuplicate && body.force !== true) {
         return reply.status(409).send({
@@ -162,14 +180,14 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
       let importRecord
       if (isDuplicate && body.force === true) {
-        // 4. Se force = true → chamar overwriteImport
+        // 5. Se force = true → chamar overwriteImport
         importRecord = await overwriteImport(referenceMonth, valid)
       } else {
-        // 5. Caso contrário → chamar saveImport
+        // 6. Caso contrário → chamar saveImport
         importRecord = await saveImport(valid)
       }
 
-      // 6. Retornar 201 com o registro de importação
+      // 7. Retornar 201 com o registro de importação
       return reply.status(201).send(importRecord)
     } catch (err) {
       if (isServiceError(err)) {

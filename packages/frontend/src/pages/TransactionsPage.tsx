@@ -203,6 +203,7 @@ export default function TransactionsPage() {
                   <th className="px-4 py-2 text-left font-medium">Descrição</th>
                   <th className="px-4 py-2 text-right font-medium">Valor (R$)</th>
                   <th className="px-4 py-2 text-center font-medium">Parcela</th>
+                  <th className="px-4 py-2 text-left font-medium">Portador</th>
                   <th className="px-4 py-2 text-left font-medium">Categoria</th>
                   <th className="px-4 py-2 text-left font-medium">Dependente</th>
                   <th className="px-4 py-2 text-center font-medium">Ações</th>
@@ -215,9 +216,12 @@ export default function TransactionsPage() {
                     <td className="px-4 py-2">{t.description}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(t.amount)}</td>
                     <td className="px-4 py-2 text-center text-xs text-gray-500">
-                      {(t as any).installmentCurrent && (t as any).installmentTotal
-                        ? `${(t as any).installmentCurrent}/${(t as any).installmentTotal}`
+                      {t.installmentCurrent && t.installmentTotal
+                        ? `${t.installmentCurrent}/${t.installmentTotal}`
                         : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {t.portador ?? '—'}
                     </td>
                     <td className="px-4 py-2">
                       {categoryMap.get(t.categoryId) ?? '—'}

@@ -1,6 +1,6 @@
-import { eq, desc } from 'drizzle-orm'
+import { eq, desc, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { imports, transactions } from '../db/schema.js'
+import { imports, transactions, dependents } from '../db/schema.js'
 import type { Import } from '../db/schema.js'
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,44 @@ export interface ImportTransaction {
 // ---------------------------------------------------------------------------
 // ImportService
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolve portador names to dependent IDs.
+ * If a portador name does not match an existing dependent (case-insensitive),
+ * creates a new dependent automatically.
+ * Returns a map of lowercase portador name → dependent ID.
+ */
+export async function resolvePortadorToDependents(
+  portadorNames: string[]
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>()
+  if (portadorNames.length === 0) return result
+
+  // Deduplicate (case-insensitive)
+  const uniqueNames = [...new Set(portadorNames.map((n) => n.trim()).filter(Boolean))]
+
+  for (const name of uniqueNames) {
+    // Check if dependent already exists (case-insensitive)
+    const [existing] = await db
+      .select({ id: dependents.id, name: dependents.name })
+      .from(dependents)
+      .where(sql`lower(${dependents.name}) = lower(${name})`)
+      .limit(1)
+
+    if (existing) {
+      result.set(name.toLowerCase(), existing.id)
+    } else {
+      // Auto-create dependent
+      const [created] = await db
+        .insert(dependents)
+        .values({ name })
+        .returning()
+      result.set(name.toLowerCase(), created.id)
+    }
+  }
+
+  return result
+}
 
 /**
  * Determina o mês de referência de um conjunto de transações como o mês

@@ -9,6 +9,9 @@ export interface Transaction {
   dependentId: string | null
   source: 'csv' | 'manual'
   importId: string | null
+  portador: string | null
+  installmentCurrent: number | null
+  installmentTotal: number | null
   createdAt: string
   updatedAt: string
 }
