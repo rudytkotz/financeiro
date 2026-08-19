@@ -1,0 +1,22 @@
+{
+  "name": "controle-financeiro",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/backend",
+    "packages/frontend",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w packages/backend\" \"npm run dev -w packages/frontend\"",
+    "build": "npm run build -w packages/shared && npm run build -w packages/backend && npm run build -w packages/frontend",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^3.0.0",
+    "concurrently": "^8.2.2",
+    "fast-check": "^3.19.0",
+    "typescript": "^5.4.5",
+    "vitest": "^3.0.0"
+  }
+}
