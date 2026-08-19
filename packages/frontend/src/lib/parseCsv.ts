@@ -14,13 +14,18 @@ export interface CsvParseResult {
 
 /**
  * Normalizes column header names to canonical form.
- * Supports: data/date → date, descrição/description → description, valor/value → value
+ * Supports multiple bank formats:
+ * - data/date → date
+ * - descrição/description/estabelecimento → description
+ * - valor/value → value
+ * - portador → (ignored, used for dependent detection)
  */
 function normalizeHeader(header: string): string | null {
   const h = header.trim().toLowerCase().normalize('NFC')
   if (h === 'data' || h === 'date') return 'date'
-  if (h === 'descrição' || h === 'descricao' || h === 'description') return 'description'
+  if (h === 'descrição' || h === 'descricao' || h === 'description' || h === 'estabelecimento') return 'description'
   if (h === 'valor' || h === 'value') return 'value'
+  if (h === 'portador') return 'portador'
   return null
 }
 
@@ -94,10 +99,10 @@ function parseAmount(raw: string): number | null {
   }
 
   const num = Number(normalized)
-  if (isNaN(num) || num <= 0) return null
+  if (isNaN(num) || num === 0) return null
 
-  // Convert to centavos
-  return Math.round(num * 100)
+  // Convert to centavos (use absolute value — negative values are credits/refunds)
+  return Math.round(Math.abs(num) * 100)
 }
 
 /**
@@ -111,15 +116,28 @@ function removeBom(text: string): string {
 }
 
 /**
+ * Detects the CSV delimiter by checking the first line.
+ * If semicolons are more common than commas in the header, use semicolon.
+ */
+function detectDelimiter(content: string): string {
+  const firstLine = content.split('\n')[0] || ''
+  const semicolons = (firstLine.match(/;/g) || []).length
+  const commas = (firstLine.match(/,/g) || []).length
+  return semicolons > commas ? ';' : ','
+}
+
+/**
  * Internal parse function that works on string content directly.
  * Exported for testing purposes.
  */
 export function parseCsvString(content: string): CsvParseResult {
   const cleanContent = removeBom(content)
+  const delimiter = detectDelimiter(cleanContent)
 
   const result = Papa.parse<Record<string, string>>(cleanContent, {
     header: true,
     skipEmptyLines: true,
+    delimiter,
     transformHeader: (header: string) => header.trim(),
   })
 
