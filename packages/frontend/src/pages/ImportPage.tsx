@@ -45,6 +45,9 @@ export default function ImportPage() {
         dependentId: null,
         source: 'csv' as const,
         importId: null,
+        portador: tx.portador ?? null,
+        installmentCurrent: tx.installmentCurrent ?? null,
+        installmentTotal: tx.installmentTotal ?? null,
       })),
       force,
     }
@@ -191,7 +194,9 @@ export default function ImportPage() {
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Data</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-700">Descrição</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-700">Portador</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-700">Valor (R$)</th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-700">Parcela</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -199,8 +204,12 @@ export default function ImportPage() {
                   <tr key={idx} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-gray-700">{tx.date}</td>
                     <td className="px-4 py-2 text-gray-700">{tx.description}</td>
+                    <td className="px-4 py-2 text-gray-700">{tx.portador ?? '—'}</td>
                     <td className="px-4 py-2 text-right text-gray-700">
                       {formatCurrency(tx.amount)}
+                    </td>
+                    <td className="px-4 py-2 text-center text-gray-700">
+                      {tx.installment ?? '—'}
                     </td>
                   </tr>
                 ))}

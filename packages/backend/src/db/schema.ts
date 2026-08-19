@@ -78,6 +78,9 @@ export const transactions = pgTable(
     dependentId: uuid('dependent_id').references(() => dependents.id), // nullable
     source: varchar('source', { length: 10 }).notNull(), // 'csv' | 'manual'
     importId: uuid('import_id').references(() => imports.id), // nullable
+    portador: varchar('portador', { length: 100 }), // nome do portador do cartão (nullable)
+    installmentCurrent: integer('installment_current'), // parcela atual (nullable)
+    installmentTotal: integer('installment_total'), // total de parcelas (nullable)
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },

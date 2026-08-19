@@ -29,8 +29,10 @@ const postImportsSchema = {
             amount: { type: 'number' },
             categoryId: { type: 'string' },
             dependentId: { type: ['string', 'null'] },
+            portador: { type: ['string', 'null'] },
+            installmentCurrent: { type: ['number', 'null'] },
+            installmentTotal: { type: ['number', 'null'] },
           },
-          additionalProperties: false,
         },
       },
       force: { type: 'boolean' },
@@ -106,6 +108,9 @@ function validateTransactions(
         amount: item.amount,
         categoryId: item.categoryId,
         dependentId: item.dependentId ?? null,
+        portador: (item as any).portador ?? null,
+        installmentCurrent: (item as any).installmentCurrent ?? null,
+        installmentTotal: (item as any).installmentTotal ?? null,
       })
     }
   }

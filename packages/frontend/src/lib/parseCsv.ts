@@ -4,6 +4,10 @@ export interface ParsedTransaction {
   date: string        // YYYY-MM-DD
   description: string
   amount: number      // centavos (integer)
+  portador?: string   // nome do portador (para identificar dependentes)
+  installment?: string // parcela formatada ex: "4/7"
+  installmentCurrent?: number // parcela atual
+  installmentTotal?: number   // total de parcelas
 }
 
 export interface CsvParseResult {
@@ -26,6 +30,7 @@ function normalizeHeader(header: string): string | null {
   if (h === 'descrição' || h === 'descricao' || h === 'description' || h === 'estabelecimento') return 'description'
   if (h === 'valor' || h === 'value') return 'value'
   if (h === 'portador') return 'portador'
+  if (h === 'parcela' || h === 'installment' || h === 'parcelas') return 'installment'
   return null
 }
 
@@ -116,6 +121,34 @@ function removeBom(text: string): string {
 }
 
 /**
+ * Parses installment string like "4 de 7", "4/7", "04/07".
+ * Returns { current, total } or null if not an installment (e.g., "-" or empty).
+ */
+function parseInstallment(raw: string): { current: number; total: number } | null {
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed === '-') return null
+
+  // Try "4 de 7" format
+  const deMatch = trimmed.match(/^(\d+)\s*de\s*(\d+)$/i)
+  if (deMatch) {
+    return { current: parseInt(deMatch[1], 10), total: parseInt(deMatch[2], 10) }
+  }
+
+  // Try "4/7" or "04/07" format
+  const slashMatch = trimmed.match(/^(\d+)\/(\d+)$/)
+  if (slashMatch) {
+    const a = parseInt(slashMatch[1], 10)
+    const b = parseInt(slashMatch[2], 10)
+    // Only treat as installment if values make sense (current <= total, total > 1)
+    if (a <= b && b > 1) {
+      return { current: a, total: b }
+    }
+  }
+
+  return null
+}
+
+/**
  * Detects the CSV delimiter by checking the first line.
  * If semicolons are more common than commas in the header, use semicolon.
  */
@@ -196,6 +229,20 @@ export function parseCsvString(content: string): CsvParseResult {
       date: parsedDate,
       description,
       amount,
+      ...(headerMap['portador'] && row[headerMap['portador']]?.trim()
+        ? { portador: row[headerMap['portador']].trim() }
+        : {}),
+      ...(headerMap['installment'] ? (() => {
+        const inst = parseInstallment(row[headerMap['installment']] || '')
+        if (inst) {
+          return {
+            installment: `${inst.current}/${inst.total}`,
+            installmentCurrent: inst.current,
+            installmentTotal: inst.total,
+          }
+        }
+        return {}
+      })() : {}),
     })
   }
 

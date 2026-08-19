@@ -27,6 +27,9 @@ export interface ImportTransaction {
   amount: number // centavos, positivo
   categoryId: string
   dependentId?: string | null
+  portador?: string | null
+  installmentCurrent?: number | null
+  installmentTotal?: number | null
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +105,9 @@ export async function saveImport(transactionList: ImportTransaction[]): Promise<
         amount: t.amount,
         categoryId: t.categoryId,
         dependentId: t.dependentId ?? null,
+        portador: t.portador ?? null,
+        installmentCurrent: t.installmentCurrent ?? null,
+        installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
       }))
@@ -169,6 +175,9 @@ export async function overwriteImport(
         amount: t.amount,
         categoryId: t.categoryId,
         dependentId: t.dependentId ?? null,
+        portador: t.portador ?? null,
+        installmentCurrent: t.installmentCurrent ?? null,
+        installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
       }))
