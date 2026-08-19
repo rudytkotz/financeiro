@@ -10,8 +10,13 @@ export interface TransactionsParams {
   sort?: string
 }
 
+interface TransactionsResponse {
+  transactions: Transaction[]
+  total: number
+}
+
 export function useTransactions(params: TransactionsParams = {}) {
-  return useQuery<Transaction[]>({
+  return useQuery<TransactionsResponse>({
     queryKey: ['transactions', params],
     queryFn: async () => {
       const { data } = await api.get('/api/transactions', { params })

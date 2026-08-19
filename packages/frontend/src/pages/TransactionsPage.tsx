@@ -55,7 +55,9 @@ export default function TransactionsPage() {
     return params
   }, [month, categoryId, startDate, endDate])
 
-  const { data: transactions, isLoading } = useTransactions(filterParams)
+  const { data: transactionsData, isLoading } = useTransactions(filterParams)
+  const transactions = transactionsData?.transactions ?? []
+  const total = transactionsData?.total ?? 0
   const { data: categories } = useCategories()
   const { data: dependents } = useDependents()
 
@@ -72,11 +74,6 @@ export default function TransactionsPage() {
     }
     return map
   }, [categories])
-
-  const total = useMemo(() => {
-    if (!transactions) return 0
-    return transactions.reduce((sum, t) => sum + t.amount, 0)
-  }, [transactions])
 
   function handleOpenCreate() {
     setEditingTransaction(null)
