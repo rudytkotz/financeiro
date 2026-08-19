@@ -50,10 +50,13 @@ if (fs.existsSync(frontendDist)) {
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',
-    wildcard: false,
   })
   // SPA fallback: rotas não-API retornam index.html
-  app.setNotFoundHandler(async (_request, reply) => {
+  app.setNotFoundHandler(async (request, reply) => {
+    // Não fazer fallback para rotas de API
+    if (request.url.startsWith('/api')) {
+      return reply.status(404).send({ error: 'Not Found' })
+    }
     return reply.sendFile('index.html')
   })
 } else {
