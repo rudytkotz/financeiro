@@ -39,7 +39,8 @@ await app.register(transactionRoutes)
 
 // Em produção, servir o frontend como arquivos estáticos
 if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.resolve(__dirname, '../../frontend/dist')
+  const frontendDist = path.resolve(process.cwd(), 'packages/frontend/dist')
+  console.log('Serving static files from:', frontendDist)
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',

@@ -3,6 +3,6 @@ builder = "NIXPACKS"
 buildCommand = "npm install --include=dev && npm run build"
 
 [deploy]
-startCommand = "NODE_ENV=production node packages/backend/dist/server.js"
+startCommand = "cd /app && NODE_ENV=production node packages/backend/dist/server.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
