@@ -45,8 +45,8 @@ export default function DashboardPage() {
     dashboard &&
     dashboard.totalUserExpenses === 0 &&
     dashboard.incomeAmount === null &&
-    dashboard.expensesByCategory.length === 0 &&
-    dashboard.expensesByDependent.length === 0
+    (dashboard.expensesByCategory ?? []).length === 0 &&
+    (dashboard.expensesByDependent ?? []).length === 0
 
   return (
     <div className="space-y-6">
@@ -140,7 +140,7 @@ export default function DashboardPage() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Gastos por categoria
           </h2>
-          {dashboard.expensesByCategory.length === 0 ? (
+          {(dashboard.expensesByCategory ?? []).length === 0 ? (
             <p className="text-gray-500">Nenhum dado disponível para o período.</p>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
@@ -153,10 +153,10 @@ export default function DashboardPage() {
                   cy="50%"
                   outerRadius={100}
                   label={({ categoryName, percentage }) =>
-                    `${categoryName} (${percentage.toFixed(1)}%)`
+                    `${categoryName} (${(percentage ?? 0).toFixed(1)}%)`
                   }
                 >
-                  {dashboard.expensesByCategory.map((_, index) => (
+                  {(dashboard.expensesByCategory ?? []).map((_, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}
@@ -177,7 +177,7 @@ export default function DashboardPage() {
       )}
 
       {/* Lista de gastos por dependente */}
-      {dashboard && !isLoading && dashboard.expensesByDependent.length > 0 && (
+      {dashboard && !isLoading && (dashboard.expensesByDependent ?? []).length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             Gastos por dependente
