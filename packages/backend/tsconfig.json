@@ -1,17 +1,16 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "declaration": true,
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "paths": {
-      "@financeiro/shared": ["../shared/src/index.ts"]
-    }
+    "esModuleInterop": true,
+    "skipLibCheck": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.property.test.ts"]
 }

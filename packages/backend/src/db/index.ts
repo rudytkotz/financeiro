@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
-import * as schema from './schema'
+import * as schema from './schema.js'
 
 // ---------------------------------------------------------------------------
 // Connection pool — DATABASE_URL must be set in the environment.

@@ -14,7 +14,7 @@ import 'dotenv/config'
 import { Pool } from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { sql } from 'drizzle-orm'
-import { categories } from './schema'
+import { categories } from './schema.js'
 
 const DEFAULT_CATEGORIES = [
   'Alimentação',
