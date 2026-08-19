@@ -37,18 +37,27 @@ await app.register(importRoutes)
 await app.register(incomeRoutes)
 await app.register(transactionRoutes)
 
-// Em produção, servir o frontend como arquivos estáticos
-if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.resolve(process.cwd(), 'packages/frontend/dist')
-  console.log('Serving static files from:', frontendDist)
+// Servir o frontend como arquivos estáticos (produção)
+const fs = await import('fs')
+const frontendDist = path.resolve(process.cwd(), 'packages/frontend/dist')
+console.log('CWD:', process.cwd())
+console.log('Frontend dist path:', frontendDist)
+console.log('Dist exists:', fs.existsSync(frontendDist))
+
+if (fs.existsSync(frontendDist)) {
+  const files = fs.readdirSync(frontendDist)
+  console.log('Dist files:', files)
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',
+    wildcard: false,
   })
   // SPA fallback: rotas não-API retornam index.html
   app.setNotFoundHandler(async (_request, reply) => {
     return reply.sendFile('index.html')
   })
+} else {
+  console.log('Frontend dist not found - running in API-only mode')
 }
 
 const port = Number(process.env.PORT ?? 3000)
