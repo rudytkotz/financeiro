@@ -76,15 +76,16 @@ function parseDate(raw: string): string | null {
 
 /**
  * Parses a monetary value string to centavos (integer).
- * Accepts: "123.45", "123,45", "1234.5", "1234,5", "1234"
- * Returns centavos or null if invalid.
+ * Accepts: "123.45", "123,45", "1234.5", "1234,5", "1234", "-50,00"
+ * Returns centavos (positive or negative) or null if invalid.
+ * Negative values represent refunds/credits.
  */
 function parseAmount(raw: string): number | null {
   const trimmed = raw.trim().replace(/\s/g, '')
   if (!trimmed) return null
 
   // Remove currency symbol if present
-  const cleaned = trimmed.replace(/^R\$\s*/, '')
+  const cleaned = trimmed.replace(/^R\$\s*/, '').replace(/^-\s*R\$\s*/, '-')
 
   // Determine decimal separator
   // If both . and , exist, the last one is the decimal separator
@@ -106,8 +107,8 @@ function parseAmount(raw: string): number | null {
   const num = Number(normalized)
   if (isNaN(num) || num === 0) return null
 
-  // Convert to centavos (use absolute value — negative values are credits/refunds)
-  return Math.round(Math.abs(num) * 100)
+  // Convert to centavos preserving sign (negative = refund/credit)
+  return Math.round(num * 100)
 }
 
 /**

@@ -36,6 +36,7 @@ const postImportsSchema = {
           },
         },
       },
+      referenceMonth: { type: 'string' },
       force: { type: 'boolean' },
     },
     additionalProperties: false,
@@ -90,9 +91,9 @@ function validateTransactions(
       reasons.push('Descrição não pode ser vazia.')
     }
 
-    // Validate amount (> 0)
-    if (typeof item.amount !== 'number' || item.amount <= 0) {
-      reasons.push('Valor deve ser maior que zero.')
+    // Validate amount (non-zero)
+    if (typeof item.amount !== 'number' || item.amount === 0) {
+      reasons.push('Valor não pode ser zero.')
     }
 
     // Validate categoryId (non-empty)
@@ -134,6 +135,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         categoryId: string
         dependentId?: string | null
       }>
+      referenceMonth?: string
       force?: boolean
     }
 
@@ -166,8 +168,10 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // 3. Calcular referenceMonth com calculateReferenceMonth
-      const referenceMonth = calculateReferenceMonth(valid)
+      // 3. Usar referenceMonth do payload (escolhido pelo usuário) ou calcular
+      const referenceMonth = body.referenceMonth && /^\d{4}-\d{2}$/.test(body.referenceMonth)
+        ? body.referenceMonth
+        : calculateReferenceMonth(valid)
 
       // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth)
@@ -184,7 +188,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         importRecord = await overwriteImport(referenceMonth, valid)
       } else {
         // 6. Caso contrário → chamar saveImport
-        importRecord = await saveImport(valid)
+        importRecord = await saveImport(valid, referenceMonth)
       }
 
       // 7. Retornar 201 com o registro de importação

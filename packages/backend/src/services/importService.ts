@@ -111,18 +111,18 @@ export async function checkDuplicate(referenceMonth: string): Promise<boolean> {
 /**
  * Persiste uma importação com suas transações dentro de uma transação SQL.
  *
- * - Calcula o reference_month a partir das transações
+ * - Usa o reference_month fornecido ou calcula a partir das transações
  * - Insere registro em `imports` com importedAt = now e transactionCount
  * - Insere todas as transações em batch com source = 'csv' e importId vinculado
  *
  * Retorna o registro de importação criado.
  */
-export async function saveImport(transactionList: ImportTransaction[]): Promise<Import> {
+export async function saveImport(transactionList: ImportTransaction[], explicitReferenceMonth?: string): Promise<Import> {
   if (transactionList.length === 0) {
     throw makeError(422, 'VALIDATION_ERROR', 'Nenhuma transação fornecida para importação.')
   }
 
-  const referenceMonth = calculateReferenceMonth(transactionList)
+  const referenceMonth = explicitReferenceMonth || calculateReferenceMonth(transactionList)
 
   const result = await db.transaction(async (tx) => {
     // Inserir registro de importação
@@ -193,7 +193,7 @@ export async function overwriteImport(
     }
 
     // Calcular o novo reference_month a partir das transações
-    const newReferenceMonth = calculateReferenceMonth(transactionList)
+    const newReferenceMonth = referenceMonth
 
     // Inserir novo registro de importação
     const [importRecord] = await tx

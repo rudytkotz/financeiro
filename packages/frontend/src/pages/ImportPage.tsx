@@ -8,21 +8,23 @@ import { AxiosError } from 'axios'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
 
 function formatCurrency(cents: number): string {
-  return (cents / 100).toLocaleString('pt-BR', {
+  const prefix = cents < 0 ? '-' : ''
+  return prefix + (Math.abs(cents) / 100).toLocaleString('pt-BR', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
 }
 
 function formatCurrencyInput(cents: number): string {
-  return (cents / 100).toFixed(2).replace('.', ',')
+  const prefix = cents < 0 ? '-' : ''
+  return prefix + (Math.abs(cents) / 100).toFixed(2).replace('.', ',')
 }
 
 function parseCurrencyInput(value: string): number | null {
   const cleaned = value.replace(/\s/g, '').replace(/R\$\s*/, '')
   const normalized = cleaned.replace(/\./g, '').replace(',', '.')
   const num = Number(normalized)
-  if (isNaN(num) || num <= 0) return null
+  if (isNaN(num) || num === 0) return null
   return Math.round(num * 100)
 }
 
@@ -36,6 +38,12 @@ export default function ImportPage() {
   const [fileError, setFileError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorsExpanded, setErrorsExpanded] = useState(false)
+
+  // Reference month (user-selected, defaults to current month)
+  const [referenceMonth, setReferenceMonth] = useState<string>(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
 
   // Editing state
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -79,6 +87,7 @@ export default function ImportPage() {
         installmentCurrent: tx.installmentCurrent ?? null,
         installmentTotal: tx.installmentTotal ?? null,
       })),
+      referenceMonth,
       force,
     }
   }
@@ -230,6 +239,19 @@ export default function ImportPage() {
       <h1 className="text-2xl font-bold">Importar Fatura</h1>
 
       <FileUpload onFileAccepted={handleFileAccepted} onError={handleFileError} />
+
+      <div className="flex items-center gap-3">
+        <label htmlFor="reference-month" className="text-sm font-medium text-gray-700">
+          Mês da fatura:
+        </label>
+        <input
+          id="reference-month"
+          type="month"
+          value={referenceMonth}
+          onChange={(e) => setReferenceMonth(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
       {fileError && (
         <div

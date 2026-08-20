@@ -131,6 +131,7 @@ export interface ImportCsvPayload {
     installmentCurrent?: number | null
     installmentTotal?: number | null
   }>
+  referenceMonth: string
   force?: boolean
 }
 
