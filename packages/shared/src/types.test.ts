@@ -34,13 +34,15 @@ describe('shared types', () => {
           const balance = income - userExpenses
           const summary: DashboardSummary = {
             month: '2024-01',
+            totalExpenses: userExpenses,
             totalUserExpenses: userExpenses,
             incomeAmount: income,
             balance,
             expensesByCategory: [],
             expensesByDependent: [],
+            expensesByPaymentMethod: [],
           }
-          return summary.balance === summary.incomeAmount! - summary.totalUserExpenses
+          return summary.balance === summary.incomeAmount! - summary.totalExpenses
         }
       )
     )

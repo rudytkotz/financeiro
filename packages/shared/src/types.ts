@@ -45,6 +45,7 @@ export interface Import {
 
 export interface DashboardSummary {
   month: string
+  totalExpenses: number
   totalUserExpenses: number
   incomeAmount: number | null
   balance: number | null
@@ -58,6 +59,11 @@ export interface DashboardSummary {
     dependentId: string
     dependentName: string
     amount: number
+  }>
+  expensesByPaymentMethod: Array<{
+    paymentMethod: string
+    amount: number
+    count: number
   }>
 }
 
