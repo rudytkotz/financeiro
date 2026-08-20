@@ -18,6 +18,7 @@ const sampleTransaction: Transaction = {
   source: 'manual',
   importId: null,
   portador: null,
+  paymentMethod: 'credito',
   installmentCurrent: null,
   installmentTotal: null,
   createdAt: '2024-03-15T10:00:00Z',

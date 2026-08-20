@@ -45,6 +45,7 @@ const updateTransactionSchema = {
       description: { type: 'string' },
       amount: { type: 'number' },
       categoryId: { type: 'string' },
+      paymentMethod: { type: 'string' },
     },
     additionalProperties: false,
   },

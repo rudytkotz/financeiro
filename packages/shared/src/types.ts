@@ -10,6 +10,7 @@ export interface Transaction {
   source: 'csv' | 'manual'
   importId: string | null
   portador: string | null
+  paymentMethod: string  // 'credito' | 'pix' | 'debito' | 'dinheiro' | 'outros'
   installmentCurrent: number | null
   installmentTotal: number | null
   createdAt: string
@@ -77,7 +78,9 @@ export interface CreateTransactionPayload {
   categoryId: string
 }
 
-export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {}
+export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
+  paymentMethod?: string
+}
 
 export interface SetDependentPayload {
   dependentId: string | null

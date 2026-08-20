@@ -46,6 +46,7 @@ export interface UpdateTransactionData {
   description?: string
   amount?: number
   categoryId?: string
+  paymentMethod?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +270,15 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
       throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
     }
     updates.categoryId = data.categoryId
+  }
+
+  // Validar paymentMethod (se fornecido)
+  if (data.paymentMethod !== undefined) {
+    const validMethods = ['credito', 'pix', 'debito', 'dinheiro', 'outros']
+    if (!validMethods.includes(data.paymentMethod)) {
+      throw makeError(422, 'VALIDATION_ERROR', 'Forma de pagamento inválida.')
+    }
+    updates.paymentMethod = data.paymentMethod
   }
 
   // Atualizar com updatedAt

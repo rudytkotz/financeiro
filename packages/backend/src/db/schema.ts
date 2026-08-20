@@ -79,6 +79,7 @@ export const transactions = pgTable(
     source: varchar('source', { length: 10 }).notNull(), // 'csv' | 'manual'
     importId: uuid('import_id').references(() => imports.id), // nullable
     portador: varchar('portador', { length: 100 }), // nome do portador do cartão (nullable)
+    paymentMethod: varchar('payment_method', { length: 20 }).notNull().default('credito'), // credito | pix | debito | dinheiro | outros
     installmentCurrent: integer('installment_current'), // parcela atual (nullable)
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
