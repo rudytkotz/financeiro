@@ -18,8 +18,9 @@ const navItems = [
 
 export default function Layout() {
   return (
-    <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-10 w-64 border-r bg-card">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:z-10 md:w-56 md:flex-col md:border-r md:bg-card">
         <div className="flex h-14 items-center border-b px-4">
           <h2 className="text-lg font-semibold">Financeiro</h2>
         </div>
@@ -44,9 +45,35 @@ export default function Layout() {
           ))}
         </nav>
       </aside>
-      <main className="ml-64 flex-1 p-6">
-        <Outlet />
+
+      {/* Main content */}
+      <main className="flex-1 pb-20 md:pb-0 md:ml-56">
+        <div className="mx-auto max-w-7xl p-4 md:p-6">
+          <Outlet />
+        </div>
       </main>
+
+      {/* Mobile bottom navigation */}
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-2 md:hidden safe-bottom">
+        {navItems.map(({ to, label, icon: Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            className={({ isActive }) =>
+              cn(
+                'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
+                isActive
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
+              )
+            }
+          >
+            <Icon className="h-5 w-5" />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   )
 }
