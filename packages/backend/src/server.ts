@@ -100,14 +100,21 @@ if (fs.existsSync(frontendDist)) {
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',
+    setHeaders: (res, filePath) => {
+      // Cache assets (hashed filenames) for 1 year, index.html never cached
+      if (filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+      } else {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+      }
+    },
   })
   // SPA fallback: rotas não-API retornam index.html
   app.setNotFoundHandler(async (request, reply) => {
-    // Não fazer fallback para rotas de API
     if (request.url.startsWith('/api')) {
       return reply.status(404).send({ error: 'Not Found' })
     }
-    return reply.sendFile('index.html')
+    return reply.header('Cache-Control', 'no-cache, no-store, must-revalidate').sendFile('index.html')
   })
 } else {
   console.log('Frontend dist not found - running in API-only mode')
