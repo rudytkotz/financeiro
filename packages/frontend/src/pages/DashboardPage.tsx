@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useSetIncome } from '@/hooks/useMutations'
@@ -40,25 +40,11 @@ function formatMonthLabel(month: string): string {
 export default function DashboardPage() {
   const [month, setMonth] = useState(getCurrentMonth)
   const { data: dashboard, isLoading } = useDashboard(month)
-  const setIncomeMutation = useSetIncome()
-  const [incomeInput, setIncomeInput] = useState('')
-
-  const handleSetIncome = (e: FormEvent) => {
-    e.preventDefault()
-    const value = parseFloat(incomeInput.replace(',', '.'))
-    if (isNaN(value)) return
-    const cents = Math.round(value * 100)
-    if (cents < 1 || cents > 99999999999) return
-    setIncomeMutation.mutate(
-      { month, payload: { amount: cents } },
-      { onSuccess: () => setIncomeInput('') }
-    )
-  }
 
   const hasNoData =
     dashboard &&
     dashboard.totalExpenses === 0 &&
-    dashboard.incomeAmount === null
+    dashboard.incomeAmount === 0
 
   return (
     <div className="space-y-6">
@@ -102,34 +88,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Renda */}
-            <div className="rounded-xl border bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-green-100 p-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-                <span className="text-sm font-medium text-gray-500">Renda</span>
-              </div>
-              {dashboard.incomeAmount > 0 ? (
-                <p className="mt-3 text-2xl font-bold text-gray-900">{formatCurrency(dashboard.incomeAmount)}</p>
-              ) : (
-                <p className="mt-3 text-2xl font-bold text-gray-400">R$ 0,00</p>
-              )}
-              <form onSubmit={handleSetIncome} className="mt-2 flex gap-1">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={incomeInput}
-                  onChange={(e) => setIncomeInput(e.target.value)}
-                  placeholder="5000,00"
-                  className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  aria-label="Valor da renda"
-                />
-                <button type="submit" disabled={setIncomeMutation.isPending}
-                  className="rounded bg-green-600 px-2 py-1 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50">
-                  OK
-                </button>
-              </form>
-            </div>
+            <IncomeCard incomeAmount={dashboard.incomeAmount} month={month} />
 
             {/* Saldo */}
             <div className="rounded-xl border bg-white p-5 shadow-sm">
@@ -246,6 +205,57 @@ export default function DashboardPage() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Inline editable income card
+// ---------------------------------------------------------------------------
+
+function IncomeCard({ incomeAmount, month }: { incomeAmount: number; month: string }) {
+  const [display, setDisplay] = useState(() => (incomeAmount / 100).toFixed(2).replace('.', ','))
+  const setIncomeMutation = useSetIncome()
+
+  // Sync display when prop changes (month navigation)
+  const [prevAmount, setPrevAmount] = useState(incomeAmount)
+  if (incomeAmount !== prevAmount) {
+    setPrevAmount(incomeAmount)
+    setDisplay((incomeAmount / 100).toFixed(2).replace('.', ','))
+  }
+
+  const handleSave = () => {
+    const cleaned = display.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.')
+    const num = Number(cleaned)
+    if (isNaN(num) || num < 0) return
+    const cents = Math.round(num * 100)
+    if (cents === incomeAmount) return
+    if (cents === 0) return // mantém zero se limpar
+    setIncomeMutation.mutate({ month, payload: { amount: cents } })
+  }
+
+  return (
+    <div className="rounded-xl border bg-white p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <div className="rounded-lg bg-green-100 p-2">
+          <TrendingUp className="h-5 w-5 text-green-600" />
+        </div>
+        <span className="text-sm font-medium text-gray-500">Renda</span>
+      </div>
+      <div className="mt-3 flex items-baseline gap-1">
+        <span className="text-sm text-gray-400">R$</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={display}
+          onChange={(e) => setDisplay(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          className="w-full text-2xl font-bold text-gray-900 border-b border-transparent bg-transparent focus:border-green-500 focus:outline-none transition hover:border-gray-300"
+          aria-label="Valor da renda"
+        />
+      </div>
+      <p className="mt-1 text-[10px] text-gray-400">Clique para editar</p>
     </div>
   )
 }
