@@ -29,9 +29,9 @@
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 7%;
+    --card: 217.2 32.6% 12%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 7%;
+    --popover: 217.2 32.6% 12%;
     --popover-foreground: 210 40% 98%;
     --primary: 210 40% 98%;
     --primary-foreground: 222.2 47.4% 11.2%;
@@ -43,8 +43,8 @@
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 217.2 32.6% 20%;
+    --input: 217.2 32.6% 20%;
     --ring: 212.7 26.8% 83.9%;
   }
 
@@ -55,6 +55,57 @@
   body {
     @apply bg-background text-foreground;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Dark mode overrides for hardcoded colors */
+  .dark input,
+  .dark select,
+  .dark textarea {
+    @apply bg-card text-foreground border-border;
+    color-scheme: dark;
+  }
+
+  .dark input::placeholder,
+  .dark select::placeholder {
+    @apply text-muted-foreground;
+  }
+}
+
+@layer components {
+  /* Utility class for cards/panels that use bg-white */
+  .dark .bg-white {
+    background-color: hsl(var(--card));
+  }
+
+  .dark .bg-gray-50,
+  .dark .bg-gray-100 {
+    background-color: hsl(var(--muted));
+  }
+
+  .dark .border-gray-100,
+  .dark .border-gray-200,
+  .dark .border-gray-300 {
+    border-color: hsl(var(--border));
+  }
+
+  .dark .text-gray-900,
+  .dark .text-gray-800 {
+    color: hsl(var(--foreground));
+  }
+
+  .dark .text-gray-700,
+  .dark .text-gray-600 {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .dark .text-gray-500,
+  .dark .text-gray-400 {
+    color: hsl(215 20.2% 55%);
+  }
+
+  .dark .bg-gradient-to-r {
+    background-image: none;
+    background-color: hsl(var(--card));
   }
 }
 

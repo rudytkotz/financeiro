@@ -98,8 +98,8 @@ export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
       onDragLeave={handleDragLeave}
       className={`flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer ${
         isDragOver
-          ? 'border-blue-500 bg-blue-50'
-          : 'border-gray-300 hover:border-gray-400 bg-white'
+          ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+          : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 bg-background'
       }`}
     >
       <Upload className="h-10 w-10 text-gray-400" />
