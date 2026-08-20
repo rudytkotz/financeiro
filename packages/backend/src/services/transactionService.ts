@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, desc, or, inArray, sql } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, or, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { transactions, categories, dependents, imports } from '../db/schema.js'
 import type { Transaction } from '../db/schema.js'
@@ -102,10 +102,10 @@ export async function listTransactions(params: ListTransactionsParams = {}): Pro
         lte(transactions.date, range.lastDay)
       )
       // Transações importadas cujo import.referenceMonth é o mês selecionado
-      const importInMonth = inArray(
-        transactions.importId,
-        db.select({ id: imports.id }).from(imports).where(eq(imports.referenceMonth, month))
-      )
+      // Usar sql raw para evitar problemas com NULL importId e subquery vazia
+      const importInMonth = sql`${transactions.importId} IN (
+        SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
+      )`
       conditions.push(or(dateInMonth!, importInMonth)!)
     }
   }
@@ -328,10 +328,9 @@ export async function deleteAllByMonth(month: string): Promise<number> {
     gte(transactions.date, range.firstDay),
     lte(transactions.date, range.lastDay)
   )
-  const importInMonth = inArray(
-    transactions.importId,
-    db.select({ id: imports.id }).from(imports).where(eq(imports.referenceMonth, month))
-  )
+  const importInMonth = sql`${transactions.importId} IN (
+    SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
+  )`
 
   const result = await db
     .delete(transactions)
