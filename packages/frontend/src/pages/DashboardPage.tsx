@@ -83,7 +83,7 @@ export default function DashboardPage() {
               Envie mensagens para o bot e lance transações sem abrir o app.
             </p>
             <div className="mt-3 space-y-1.5">
-              <p className="text-[11px] text-gray-500"><span className="font-semibold text-gray-700">1.</span> Abra o bot: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-blue-600 text-[10px]">@FinanceiroControlBot</span></p>
+              <p className="text-[11px] text-gray-500"><span className="font-semibold text-gray-700">1.</span> Abra o bot: <a href="https://t.me/Riiquinho_bot" target="_blank" rel="noopener noreferrer" className="font-mono bg-white px-1.5 py-0.5 rounded text-blue-600 text-[10px] hover:underline">@Riiquinho_bot</a></p>
               <p className="text-[11px] text-gray-500"><span className="font-semibold text-gray-700">2.</span> Vincule: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-[10px]">/vincular seuusuario suasenha</span></p>
               <p className="text-[11px] text-gray-500"><span className="font-semibold text-gray-700">3.</span> Lance: <span className="font-mono bg-white px-1.5 py-0.5 rounded text-[10px]">150,50 ifood</span> ou <span className="font-mono bg-white px-1.5 py-0.5 rounded text-[10px]">pix 800 aluguel</span></p>
             </div>
