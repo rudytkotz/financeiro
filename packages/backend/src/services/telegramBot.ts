@@ -2,7 +2,7 @@ import TelegramBot from 'node-telegram-bot-api'
 import { eq, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'
-import { users, telegramLinks, transactions } from '../db/schema.js'
+import { users, telegramLinks, transactions, dependents } from '../db/schema.js'
 
 const PAYMENT_PREFIXES: Record<string, string> = {
   pix: 'pix',
@@ -28,11 +28,13 @@ function getCurrentDate(): string {
  * Parse a transaction message.
  * Formats:
  *   150,50 ifood
+ *   150,50 ifood @maria
  *   pix 800 aluguel
+ *   pix 800 aluguel @joao
  *   -50 reembolso uber
- *   deb 25,90 padaria
+ *   deb 25,90 padaria @filho
  */
-function parseMessage(text: string): { amount: number; description: string; paymentMethod: string } | null {
+function parseMessage(text: string): { amount: number; description: string; paymentMethod: string; dependentName: string | null } | null {
   const parts = text.trim().split(/\s+/)
   if (parts.length < 2) return null
 
@@ -53,14 +55,27 @@ function parseMessage(text: string): { amount: number; description: string; paym
   const amount = Number(amountStr)
   if (isNaN(amount) || amount === 0) return null
 
-  // Rest is description
-  const description = parts.slice(startIdx + 1).join(' ')
+  // Rest is description + optional @dependente
+  const restParts = parts.slice(startIdx + 1)
+  let dependentName: string | null = null
+  const descParts: string[] = []
+
+  for (const part of restParts) {
+    if (part.startsWith('@')) {
+      dependentName = part.slice(1) // remove @
+    } else {
+      descParts.push(part)
+    }
+  }
+
+  const description = descParts.join(' ')
   if (!description) return null
 
   return {
-    amount: Math.round(amount * 100), // centavos
+    amount: Math.round(amount * 100),
     description,
     paymentMethod,
+    dependentName,
   }
 }
 
@@ -87,7 +102,9 @@ export function startTelegramBot() {
       `• \`pix 800 aluguel\` — pix\n` +
       `• \`deb 25,90 padaria\` — débito\n` +
       `• \`din 10 estacionamento\` — dinheiro\n` +
-      `• \`-50 reembolso\` — valor negativo`,
+      `• \`-50 reembolso\` — valor negativo\n` +
+      `• \`150 ifood @maria\` — com dependente\n\n` +
+      `Use @nome no final para atribuir a um dependente.`,
       { parse_mode: 'Markdown' }
     )
   })
@@ -179,8 +196,29 @@ export function startTelegramBot() {
     // Parse message
     const parsed = parseMessage(msg.text)
     if (!parsed) {
-      bot.sendMessage(msg.chat.id, '❓ Formato inválido.\nExemplo: `150,50 ifood` ou `pix 800 aluguel`', { parse_mode: 'Markdown' })
+      bot.sendMessage(msg.chat.id, '❓ Formato inválido.\nExemplo: `150,50 ifood` ou `pix 800 aluguel @maria`', { parse_mode: 'Markdown' })
       return
+    }
+
+    // Resolve dependent if specified
+    let dependentId: string | null = null
+    if (parsed.dependentName) {
+      const [dep] = await db
+        .select({ id: dependents.id })
+        .from(dependents)
+        .where(sql`lower(${dependents.name}) = lower(${parsed.dependentName})`)
+        .limit(1)
+
+      if (dep) {
+        dependentId = dep.id
+      } else {
+        // Auto-create dependent
+        const [created] = await db
+          .insert(dependents)
+          .values({ name: parsed.dependentName, userId: link.userId })
+          .returning()
+        dependentId = created.id
+      }
     }
 
     // Insert transaction
@@ -190,7 +228,7 @@ export function startTelegramBot() {
         description: parsed.description,
         amount: parsed.amount,
         categoryId: null,
-        dependentId: null,
+        dependentId,
         source: 'manual',
         importId: null,
         paymentMethod: parsed.paymentMethod,
@@ -200,9 +238,10 @@ export function startTelegramBot() {
 
       const formattedAmount = (parsed.amount / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       const typeLabel = parsed.paymentMethod === 'credito' ? '💳' : parsed.paymentMethod === 'pix' ? '📱' : parsed.paymentMethod === 'debito' ? '👛' : '💵'
+      const depLabel = parsed.dependentName ? ` → ${parsed.dependentName}` : ''
 
       bot.sendMessage(msg.chat.id,
-        `✅ Lançado!\n${typeLabel} ${formattedAmount} — ${parsed.description}`,
+        `✅ Lançado!\n${typeLabel} ${formattedAmount} — ${parsed.description}${depLabel}`,
       )
     } catch (err) {
       console.error('Telegram bot error:', err)
