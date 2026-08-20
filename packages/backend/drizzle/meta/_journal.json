@@ -43,6 +43,13 @@
       "when": 1724500000000,
       "tag": "0005_category_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1724600000000,
+      "tag": "0006_telegram_links",
+      "breakpoints": true
     }
   ]
 }

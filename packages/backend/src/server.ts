@@ -113,12 +113,15 @@ if (fs.existsSync(frontendDist)) {
   console.log('Frontend dist not found - running in API-only mode')
 }
 
+import { startTelegramBot } from './services/telegramBot.js'
+
 const port = Number(process.env.PORT ?? 3000)
 const host = process.env.HOST ?? '0.0.0.0'
 
 try {
   await app.listen({ port, host })
   console.log(`Backend running on http://${host}:${port}`)
+  startTelegramBot()
 } catch (err) {
   app.log.error(err)
   process.exit(1)

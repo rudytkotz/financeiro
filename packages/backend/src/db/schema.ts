@@ -122,6 +122,16 @@ export const income = pgTable('income', {
 })
 
 // ---------------------------------------------------------------------------
+// telegram_links (vinculo chat_id → user)
+// ---------------------------------------------------------------------------
+export const telegramLinks = pgTable('telegram_links', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  chatId: varchar('chat_id', { length: 50 }).notNull().unique(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
 // Type inference helpers (used by services)
 // ---------------------------------------------------------------------------
 export type User = typeof users.$inferSelect
