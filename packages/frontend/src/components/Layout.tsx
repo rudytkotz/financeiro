@@ -7,12 +7,16 @@ import {
   Users,
   Shield,
   LogOut,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../hooks/useAuth'
+import { useDarkMode } from '../hooks/useDarkMode'
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { isDark, toggle } = useDarkMode()
   const navigate = useNavigate()
 
   const navItems = [
@@ -48,11 +52,14 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        {/* User + logout */}
-        <div className="border-t p-3">
+        {/* User + dark mode + logout */}
+        <div className="border-t p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-600 truncate">{user?.username}</span>
-            <button onClick={handleLogout} className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50" title="Sair">
+            <button onClick={toggle} className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition" title={isDark ? 'Modo claro' : 'Modo escuro'}>
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate mx-2">{user?.username}</span>
+            <button onClick={handleLogout} className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition" title="Sair">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
