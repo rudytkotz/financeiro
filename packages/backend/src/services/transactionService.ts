@@ -285,6 +285,26 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
     .where(eq(transactions.id, id))
     .returning()
 
+  // Propagar categoryId e dependentId para todas as parcelas da mesma compra
+  if (existing.installmentTotal && existing.installmentTotal > 1) {
+    const propagateUpdates: Record<string, unknown> = {}
+    if (data.categoryId !== undefined) propagateUpdates.categoryId = data.categoryId
+    if ((data as any).dependentId !== undefined) propagateUpdates.dependentId = (data as any).dependentId
+
+    if (Object.keys(propagateUpdates).length > 0) {
+      propagateUpdates.updatedAt = new Date()
+      await db
+        .update(transactions)
+        .set(propagateUpdates)
+        .where(
+          sql`${transactions.id} != ${id}
+            AND ${transactions.description} = ${existing.description}
+            AND ${transactions.amount} = ${existing.amount}
+            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+        )
+    }
+  }
+
   return updated
 }
 
@@ -383,6 +403,19 @@ export async function associateDependent(
       .where(eq(transactions.id, id))
       .returning()
 
+    // Propagar para todas as parcelas da mesma compra
+    if (existing.installmentTotal && existing.installmentTotal > 1) {
+      await db
+        .update(transactions)
+        .set({ dependentId: null, updatedAt: new Date() })
+        .where(
+          sql`${transactions.id} != ${id}
+            AND ${transactions.description} = ${existing.description}
+            AND ${transactions.amount} = ${existing.amount}
+            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+        )
+    }
+
     return { transaction: updated }
   }
 
@@ -414,6 +447,19 @@ export async function associateDependent(
     .set({ dependentId, updatedAt: new Date() })
     .where(eq(transactions.id, id))
     .returning()
+
+  // Propagar para todas as parcelas da mesma compra
+  if (existing.installmentTotal && existing.installmentTotal > 1) {
+    await db
+      .update(transactions)
+      .set({ dependentId, updatedAt: new Date() })
+      .where(
+        sql`${transactions.id} != ${id}
+          AND ${transactions.description} = ${existing.description}
+          AND ${transactions.amount} = ${existing.amount}
+          AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+      )
+  }
 
   return { transaction: updated }
 }
