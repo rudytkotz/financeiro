@@ -16,14 +16,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// On 401 response, clear token and redirect to login
+// On 401 response, clear token and redirect to login (only once)
+let isRedirecting = false
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config.url?.includes('/api/auth/')) {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('auth_user')
-      window.location.href = '/login'
+    if (error.response?.status === 401 && !error.config?.url?.includes('/api/auth/')) {
+      if (!isRedirecting) {
+        isRedirecting = true
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        window.location.replace('/login')
+      }
     }
     return Promise.reject(error)
   }
