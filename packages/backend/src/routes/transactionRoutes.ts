@@ -4,6 +4,7 @@ import {
   createTransaction,
   updateTransaction,
   deleteTransaction,
+  deleteAllByMonth,
   associateDependent,
   type ServiceError,
   type ListTransactionsParams,
@@ -101,6 +102,23 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
     try {
       const transaction = await updateTransaction(id, body)
       return reply.status(200).send(transaction)
+    } catch (err) {
+      if (isServiceError(err)) {
+        return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      }
+      throw err
+    }
+  })
+
+  // DELETE /api/transactions/bulk?month=YYYY-MM — exclui todas do mês
+  app.delete('/api/transactions/bulk', async (request, reply) => {
+    const { month } = request.query as { month?: string }
+    if (!month) {
+      return reply.status(422).send({ code: 'VALIDATION_ERROR', message: 'Parâmetro month é obrigatório.' })
+    }
+    try {
+      const count = await deleteAllByMonth(month)
+      return reply.status(200).send({ deleted: count })
     } catch (err) {
       if (isServiceError(err)) {
         return reply.status(err.statusCode).send({ code: err.code, message: err.message })

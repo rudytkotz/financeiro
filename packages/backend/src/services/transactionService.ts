@@ -1,6 +1,6 @@
-import { eq, and, gte, lte, desc } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, or, inArray, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { transactions, categories, dependents } from '../db/schema.js'
+import { transactions, categories, dependents, imports } from '../db/schema.js'
 import type { Transaction } from '../db/schema.js'
 
 // ---------------------------------------------------------------------------
@@ -92,12 +92,20 @@ export async function listTransactions(params: ListTransactionsParams = {}): Pro
   const { month, categoryId, startDate, endDate, sort } = params
   const conditions: ReturnType<typeof eq>[] = []
 
-  // Filtro por mês
+  // Filtro por mês: transações com date no mês OU vinculadas a importação daquele mês
   if (month) {
     const range = getMonthRange(month)
     if (range) {
-      conditions.push(gte(transactions.date, range.firstDay))
-      conditions.push(lte(transactions.date, range.lastDay))
+      const dateInMonth = and(
+        gte(transactions.date, range.firstDay),
+        lte(transactions.date, range.lastDay)
+      )
+      // Transações importadas cujo import.referenceMonth é o mês selecionado
+      const importInMonth = inArray(
+        transactions.importId,
+        db.select({ id: imports.id }).from(imports).where(eq(imports.referenceMonth, month))
+      )
+      conditions.push(or(dateInMonth!, importInMonth)!)
     }
   }
 
@@ -290,6 +298,40 @@ export async function deleteTransaction(id: string): Promise<void> {
   }
 
   await db.delete(transactions).where(eq(transactions.id, id))
+}
+
+/**
+ * Remove todas as transações de um determinado mês (YYYY-MM).
+ * Inclui transações com date naquele mês E transações vinculadas a importações daquele mês.
+ */
+export async function deleteAllByMonth(month: string): Promise<number> {
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Mês inválido. Formato esperado: YYYY-MM.')
+  }
+
+  const range = getMonthRange(month)
+  if (!range) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Mês inválido.')
+  }
+
+  const dateInMonth = and(
+    gte(transactions.date, range.firstDay),
+    lte(transactions.date, range.lastDay)
+  )
+  const importInMonth = inArray(
+    transactions.importId,
+    db.select({ id: imports.id }).from(imports).where(eq(imports.referenceMonth, month))
+  )
+
+  const result = await db
+    .delete(transactions)
+    .where(or(dateInMonth!, importInMonth)!)
+    .returning({ id: transactions.id })
+
+  // Also delete the import records for that month
+  await db.delete(imports).where(eq(imports.referenceMonth, month))
+
+  return result.length
 }
 
 // ---------------------------------------------------------------------------

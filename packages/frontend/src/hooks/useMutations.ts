@@ -56,6 +56,20 @@ export function useDeleteTransaction() {
   })
 }
 
+export function useDeleteAllTransactions() {
+  const queryClient = useQueryClient()
+  return useMutation<{ deleted: number }, Error, string>({
+    mutationFn: async (month) => {
+      const { data } = await api.delete('/api/transactions/bulk', { params: { month } })
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
 export function useSetTransactionDependent() {
   const queryClient = useQueryClient()
   return useMutation<Transaction, unknown, { id: string; payload: SetDependentPayload }>({
