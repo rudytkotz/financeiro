@@ -57,6 +57,27 @@ function isServiceError(err: unknown): err is ServiceError {
   )
 }
 
+/**
+ * Offsets a YYYY-MM string by N months (positive = future, negative = past).
+ */
+function offsetMonth(yearMonth: string, offset: number): string {
+  const [yearStr, monthStr] = yearMonth.split('-')
+  let year = parseInt(yearStr, 10)
+  let month = parseInt(monthStr, 10) - 1 + offset // 0-indexed
+
+  // Normalize
+  while (month < 0) {
+    month += 12
+    year -= 1
+  }
+  while (month > 11) {
+    month -= 12
+    year += 1
+  }
+
+  return `${year}-${String(month + 1).padStart(2, '0')}`
+}
+
 interface ValidationError {
   index: number
   reasons: string[]
@@ -173,6 +194,41 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         ? body.referenceMonth
         : calculateReferenceMonth(valid)
 
+      // 3b. Expandir parcelas: para cada transação com installment, gerar as parcelas faltantes
+      //     em outros meses. Ex: 2/3 no mês X → gerar 1/3 no mês X-1 e 3/3 no mês X+1
+      const expandedTransactions: ImportTransaction[] = []
+      for (const t of valid) {
+        // A transação original sempre entra
+        expandedTransactions.push(t)
+
+        if (t.installmentCurrent && t.installmentTotal && t.installmentTotal > 1) {
+          const current = t.installmentCurrent
+          const total = t.installmentTotal
+
+          for (let i = 1; i <= total; i++) {
+            if (i === current) continue // já adicionada acima
+
+            // Calcular o mês offset: se current=2 e i=1, offset=-1; se i=3, offset=+1
+            const monthOffset = i - current
+            const targetMonth = offsetMonth(referenceMonth, monthOffset)
+
+            expandedTransactions.push({
+              date: `${targetMonth}-01`, // dia 1 do mês alvo
+              description: t.description,
+              amount: t.amount,
+              categoryId: t.categoryId,
+              dependentId: t.dependentId,
+              portador: t.portador,
+              installmentCurrent: i,
+              installmentTotal: total,
+            })
+          }
+        }
+      }
+
+      // Usar expandedTransactions no lugar de valid para salvar
+      const transactionsToSave = expandedTransactions
+
       // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth)
       if (isDuplicate && body.force !== true) {
@@ -185,10 +241,10 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       let importRecord
       if (isDuplicate && body.force === true) {
         // 5. Se force = true → chamar overwriteImport
-        importRecord = await overwriteImport(referenceMonth, valid)
+        importRecord = await overwriteImport(referenceMonth, transactionsToSave)
       } else {
         // 6. Caso contrário → chamar saveImport
-        importRecord = await saveImport(valid, referenceMonth)
+        importRecord = await saveImport(transactionsToSave, referenceMonth)
       }
 
       // 7. Retornar 201 com o registro de importação
