@@ -100,13 +100,12 @@ if (fs.existsSync(frontendDist)) {
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',
-    setHeaders: (res: any, filePath: string) => {
-      if (filePath.includes('/assets/')) {
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
-      } else {
-        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-      }
-    },
+  })
+  // Disable caching for index.html
+  app.addHook('onSend', async (request, reply) => {
+    if (!request.url.startsWith('/api') && !request.url.includes('/assets/')) {
+      reply.header('Cache-Control', 'no-cache, no-store, must-revalidate')
+    }
   })
   // SPA fallback: rotas não-API retornam index.html
   app.setNotFoundHandler(async (request, reply) => {
