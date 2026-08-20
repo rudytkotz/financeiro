@@ -53,7 +53,7 @@ export default function TransactionModal({
         setDate(transaction.date)
         setDescription(transaction.description)
         setAmountDisplay(centsToBrl(transaction.amount))
-        setCategoryId(transaction.categoryId)
+        setCategoryId(transaction.categoryId ?? '')
       } else {
         setDate('')
         setDescription('')
