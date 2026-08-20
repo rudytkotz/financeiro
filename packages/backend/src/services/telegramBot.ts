@@ -1,3 +1,4 @@
+// @ts-ignore - node-telegram-bot-api has no proper ESM types
 import TelegramBot from 'node-telegram-bot-api'
 import { eq, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
@@ -90,7 +91,7 @@ export function startTelegramBot() {
   console.log('🤖 Telegram bot started')
 
   // /start command
-  bot.onText(/\/start/, (msg) => {
+  bot.onText(/\/start/, (msg: any) => {
     bot.sendMessage(msg.chat.id,
       `🏦 *Financeiro Bot*\n\n` +
       `Comandos:\n` +
@@ -110,7 +111,7 @@ export function startTelegramBot() {
   })
 
   // /vincular command
-  bot.onText(/\/vincular\s+(\S+)\s+(\S+)/, async (msg, match) => {
+  bot.onText(/\/vincular\s+(\S+)\s+(\S+)/, async (msg: any, match: RegExpExecArray | null) => {
     if (!match) return
     const chatId = String(msg.chat.id)
     const username = match[1]
@@ -151,14 +152,14 @@ export function startTelegramBot() {
   })
 
   // /desvincular command
-  bot.onText(/\/desvincular/, async (msg) => {
+  bot.onText(/\/desvincular/, async (msg: any) => {
     const chatId = String(msg.chat.id)
     await db.delete(telegramLinks).where(eq(telegramLinks.chatId, chatId))
     bot.sendMessage(msg.chat.id, '✅ Vínculo removido.')
   })
 
   // /status command
-  bot.onText(/\/status/, async (msg) => {
+  bot.onText(/\/status/, async (msg: any) => {
     const chatId = String(msg.chat.id)
     const [link] = await db
       .select({ userId: telegramLinks.userId })
@@ -176,7 +177,7 @@ export function startTelegramBot() {
   })
 
   // Transaction messages (not commands)
-  bot.on('message', async (msg) => {
+  bot.on('message', async (msg: any) => {
     if (!msg.text || msg.text.startsWith('/')) return
 
     const chatId = String(msg.chat.id)

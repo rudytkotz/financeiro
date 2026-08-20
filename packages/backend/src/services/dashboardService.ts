@@ -7,7 +7,7 @@ import { transactions, categories, dependents, income } from '../db/schema.js'
 // ---------------------------------------------------------------------------
 
 export interface ExpenseByCategory {
-  categoryId: string
+  categoryId: string | null
   categoryName: string
   amount: number
   percentage: number

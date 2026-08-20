@@ -100,8 +100,7 @@ if (fs.existsSync(frontendDist)) {
   await app.register(fastifyStatic, {
     root: frontendDist,
     prefix: '/',
-    setHeaders: (res, filePath) => {
-      // Cache assets (hashed filenames) for 1 year, index.html never cached
+    setHeaders: (res: any, filePath: string) => {
       if (filePath.includes('/assets/')) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
       } else {
