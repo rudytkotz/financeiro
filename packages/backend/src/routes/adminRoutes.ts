@@ -78,6 +78,13 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send({ message: 'Todos os dados foram apagados.' })
   })
 
+  // DELETE /api/admin/transactions — delete only all transactions and imports
+  app.delete('/api/admin/transactions', async (_request, reply) => {
+    await db.delete(transactions)
+    await db.delete(imports)
+    return reply.status(200).send({ message: 'Todas as transações foram apagadas.' })
+  })
+
   // GET /api/admin/users/:id/transactions
   app.get('/api/admin/users/:id/transactions', async (request, reply) => {
     const { id } = request.params as { id: string }
