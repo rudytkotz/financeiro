@@ -109,10 +109,10 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-sm font-medium text-gray-500">Renda</span>
               </div>
-              {dashboard.incomeAmount !== null ? (
+              {dashboard.incomeAmount > 0 ? (
                 <p className="mt-3 text-2xl font-bold text-gray-900">{formatCurrency(dashboard.incomeAmount)}</p>
               ) : (
-                <p className="mt-3 text-2xl font-bold text-gray-300">–</p>
+                <p className="mt-3 text-2xl font-bold text-gray-400">R$ 0,00</p>
               )}
               <form onSubmit={handleSetIncome} className="mt-2 flex gap-1">
                 <input
@@ -134,19 +134,15 @@ export default function DashboardPage() {
             {/* Saldo */}
             <div className="rounded-xl border bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2">
-                <div className={`rounded-lg p-2 ${dashboard.balance !== null && dashboard.balance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <DollarSign className={`h-5 w-5 ${dashboard.balance !== null && dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                <div className={`rounded-lg p-2 ${dashboard.balance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <DollarSign className={`h-5 w-5 ${dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`} />
                 </div>
                 <span className="text-sm font-medium text-gray-500">Saldo</span>
               </div>
-              {dashboard.balance !== null ? (
-                <p className={`mt-3 text-2xl font-bold ${dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(dashboard.balance)}
-                </p>
-              ) : (
-                <p className="mt-3 text-2xl font-bold text-gray-300">–</p>
-              )}
-              {dashboard.balance !== null && dashboard.incomeAmount && (
+              <p className={`mt-3 text-2xl font-bold ${dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(dashboard.balance)}
+              </p>
+              {dashboard.incomeAmount > 0 && (
                 <p className="mt-1 text-xs text-gray-400">
                   {Math.round((dashboard.totalExpenses / dashboard.incomeAmount) * 100)}% da renda
                 </p>

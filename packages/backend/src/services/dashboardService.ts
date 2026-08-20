@@ -106,15 +106,15 @@ export async function getDashboard(month: string, userId?: string): Promise<Dash
 
   const totalUserExpenses = Number(userExpensesResult.total)
 
-  // 3. Renda do mês
+  // 3. Renda do mês (default 0 se não cadastrada)
   const [incomeRecord] = await db
     .select()
     .from(income)
-    .where(eq(income.month, month))
+    .where(userId ? and(eq(income.month, month), eq(income.userId, userId)) : eq(income.month, month))
     .limit(1)
 
-  const incomeAmount = incomeRecord ? incomeRecord.amount : null
-  const balance = incomeAmount !== null ? incomeAmount - totalExpenses : null
+  const incomeAmount = incomeRecord ? incomeRecord.amount : 0
+  const balance = incomeAmount - totalExpenses
 
   // 4. Gastos por categoria (todas as transações)
   const categoryExpenses = await db

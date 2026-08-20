@@ -42,7 +42,7 @@ describe('shared types', () => {
             expensesByDependent: [],
             expensesByPaymentMethod: [],
           }
-          return summary.balance === summary.incomeAmount! - summary.totalExpenses
+          return summary.balance === summary.incomeAmount - summary.totalExpenses
         }
       )
     )

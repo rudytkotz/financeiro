@@ -47,8 +47,8 @@ export interface DashboardSummary {
   month: string
   totalExpenses: number
   totalUserExpenses: number
-  incomeAmount: number | null
-  balance: number | null
+  incomeAmount: number
+  balance: number
   expensesByCategory: Array<{
     categoryId: string
     categoryName: string
