@@ -4,6 +4,9 @@ import fastifyStatic from '@fastify/static'
 import { config } from 'dotenv'
 import * as path from 'path'
 import { fileURLToPath } from 'url'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { migrate } from 'drizzle-orm/node-postgres/migrator'
+import { Pool } from 'pg'
 import categoryRoutes from './routes/categoryRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import dependentRoutes from './routes/dependentRoutes.js'
@@ -15,6 +18,26 @@ config()
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// --- Run migrations before starting server ---
+async function runMigrations() {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.DATABASE_URL?.includes('sslmode=require') ? { rejectUnauthorized: false } : undefined,
+  })
+  const migrateDb = drizzle(pool)
+  const migrationsFolder = path.resolve(__dirname, '../drizzle')
+  console.log('⏳ Running migrations from:', migrationsFolder)
+  try {
+    await migrate(migrateDb, { migrationsFolder })
+    console.log('✅ Migrations applied successfully.')
+  } catch (err) {
+    console.error('❌ Migration error:', err)
+  }
+  await pool.end()
+}
+
+await runMigrations()
 
 const app = Fastify({ logger: true })
 
