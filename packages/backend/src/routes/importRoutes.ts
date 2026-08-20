@@ -6,6 +6,7 @@ import {
   overwriteImport,
   listImports,
   resolvePortadorToDependents,
+  insertStandaloneTransactions,
   type ImportTransaction,
   type ServiceError,
 } from '../services/importService.js'
@@ -196,24 +197,21 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
       // 3b. Expandir parcelas: para cada transação com installment, gerar as parcelas faltantes
       //     em outros meses. Ex: 2/3 no mês X → gerar 1/3 no mês X-1 e 3/3 no mês X+1
-      const expandedTransactions: ImportTransaction[] = []
+      //     Parcelas de outros meses são inseridas SEM importId (não pertencem a este import)
+      const otherMonthTransactions: ImportTransaction[] = []
       for (const t of valid) {
-        // A transação original sempre entra
-        expandedTransactions.push(t)
-
         if (t.installmentCurrent && t.installmentTotal && t.installmentTotal > 1) {
           const current = t.installmentCurrent
           const total = t.installmentTotal
 
           for (let i = 1; i <= total; i++) {
-            if (i === current) continue // já adicionada acima
+            if (i === current) continue // a parcela original já está em 'valid'
 
-            // Calcular o mês offset: se current=2 e i=1, offset=-1; se i=3, offset=+1
             const monthOffset = i - current
             const targetMonth = offsetMonth(referenceMonth, monthOffset)
 
-            expandedTransactions.push({
-              date: `${targetMonth}-01`, // dia 1 do mês alvo
+            otherMonthTransactions.push({
+              date: `${targetMonth}-01`,
               description: t.description,
               amount: t.amount,
               categoryId: t.categoryId,
@@ -226,8 +224,8 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
-      // Usar expandedTransactions no lugar de valid para salvar
-      const transactionsToSave = expandedTransactions
+      // 'valid' contém apenas as transações do mês corrente (a parcela atual)
+      const transactionsToSave = valid
 
       // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth)
@@ -247,7 +245,12 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         importRecord = await saveImport(transactionsToSave, referenceMonth)
       }
 
-      // 7. Retornar 201 com o registro de importação
+      // 7. Inserir parcelas de outros meses (sem importId)
+      if (otherMonthTransactions.length > 0) {
+        await insertStandaloneTransactions(otherMonthTransactions)
+      }
+
+      // 8. Retornar 201 com o registro de importação
       return reply.status(201).send(importRecord)
     } catch (err) {
       if (isServiceError(err)) {

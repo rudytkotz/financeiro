@@ -238,3 +238,26 @@ export async function listImports(): Promise<Import[]> {
     .from(imports)
     .orderBy(desc(imports.importedAt))
 }
+
+/**
+ * Insere transações avulsas (sem importId) diretamente no banco.
+ * Usado para parcelas expandidas que pertencem a outros meses.
+ */
+export async function insertStandaloneTransactions(transactionList: ImportTransaction[]): Promise<void> {
+  if (transactionList.length === 0) return
+
+  await db.insert(transactions).values(
+    transactionList.map((t) => ({
+      date: t.date,
+      description: t.description,
+      amount: t.amount,
+      categoryId: t.categoryId,
+      dependentId: t.dependentId ?? null,
+      portador: t.portador ?? null,
+      installmentCurrent: t.installmentCurrent ?? null,
+      installmentTotal: t.installmentTotal ?? null,
+      source: 'csv' as const,
+      importId: null, // sem vínculo com import
+    }))
+  )
+}
