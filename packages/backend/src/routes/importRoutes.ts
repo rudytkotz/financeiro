@@ -7,6 +7,7 @@ import {
   listImports,
   resolvePortadorToDependents,
   insertStandaloneTransactions,
+  filterDuplicateInstallments,
   type ImportTransaction,
   type ServiceError,
 } from '../services/importService.js'
@@ -225,7 +226,20 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // 'valid' contém apenas as transações do mês corrente (a parcela atual)
-      const transactionsToSave = valid
+      // Filtrar duplicatas: remover transações com parcela que já existem no banco
+      const transactionsToSave = await filterDuplicateInstallments(valid)
+
+      // Se todas as transações eram duplicatas, inserir somente as de outros meses e retornar
+      if (transactionsToSave.length === 0) {
+        if (otherMonthTransactions.length > 0) {
+          await insertStandaloneTransactions(otherMonthTransactions)
+        }
+        return reply.status(200).send({
+          referenceMonth,
+          transactionCount: 0,
+          message: 'Todas as parcelas já estavam cadastradas.',
+        })
+      }
 
       // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth)

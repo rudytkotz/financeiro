@@ -242,12 +242,18 @@ export async function listImports(): Promise<Import[]> {
 /**
  * Insere transações avulsas (sem importId) diretamente no banco.
  * Usado para parcelas expandidas que pertencem a outros meses.
+ * Antes de inserir, verifica duplicatas por (date, description, amount, installmentCurrent, installmentTotal).
  */
 export async function insertStandaloneTransactions(transactionList: ImportTransaction[]): Promise<void> {
   if (transactionList.length === 0) return
 
+  // Filtrar duplicatas: verificar se já existe transação com mesma date+description+amount+parcela
+  const toInsert = await filterDuplicateInstallments(transactionList)
+
+  if (toInsert.length === 0) return
+
   await db.insert(transactions).values(
-    transactionList.map((t) => ({
+    toInsert.map((t) => ({
       date: t.date,
       description: t.description,
       amount: t.amount,
@@ -257,7 +263,40 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
       installmentCurrent: t.installmentCurrent ?? null,
       installmentTotal: t.installmentTotal ?? null,
       source: 'csv' as const,
-      importId: null, // sem vínculo com import
+      importId: null,
     }))
   )
+}
+
+/**
+ * Filtra transações que já existem no banco com mesma combinação de
+ * date + description + amount + installmentCurrent + installmentTotal.
+ * Retorna apenas as que NÃO são duplicatas.
+ * Transações sem parcela (installmentCurrent == null) nunca são filtradas.
+ */
+export async function filterDuplicateInstallments(transactionList: ImportTransaction[]): Promise<ImportTransaction[]> {
+  const result: ImportTransaction[] = []
+
+  for (const t of transactionList) {
+    if (t.installmentCurrent && t.installmentTotal) {
+      const [existing] = await db
+        .select({ id: transactions.id })
+        .from(transactions)
+        .where(
+          sql`${transactions.description} = ${t.description}
+            AND ${transactions.amount} = ${t.amount}
+            AND ${transactions.installmentCurrent} = ${t.installmentCurrent}
+            AND ${transactions.installmentTotal} = ${t.installmentTotal}`
+        )
+        .limit(1)
+
+      if (!existing) {
+        result.push(t)
+      }
+    } else {
+      result.push(t)
+    }
+  }
+
+  return result
 }
