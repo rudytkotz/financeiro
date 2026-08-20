@@ -29,6 +29,13 @@
       "when": 1724300000000,
       "tag": "0003_add_users_and_user_id",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1724400000000,
+      "tag": "0004_add_reference_month_to_transactions",
+      "breakpoints": true
     }
   ]
 }

@@ -96,6 +96,7 @@ export const transactions = pgTable(
     paymentMethod: varchar('payment_method', { length: 20 }).notNull().default('credito'), // credito | pix | debito | dinheiro | outros
     installmentCurrent: integer('installment_current'), // parcela atual (nullable)
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
+    referenceMonth: varchar('reference_month', { length: 7 }), // YYYY-MM — mês em que a transação deve aparecer
     userId: uuid('user_id').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),

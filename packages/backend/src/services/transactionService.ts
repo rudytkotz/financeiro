@@ -98,24 +98,9 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
     conditions.push(or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
   }
 
-  // Filtro por mês: transações com date no mês OU vinculadas a importação daquele mês
+  // Filtro por mês: usar referenceMonth diretamente
   if (month) {
-    const range = getMonthRange(month)
-    if (range) {
-      const dateInMonth = and(
-        gte(transactions.date, range.firstDay),
-        lte(transactions.date, range.lastDay)
-      )
-      // Transações importadas cujo import.referenceMonth é o mês selecionado
-      const importInMonth = userId
-        ? sql`${transactions.importId} IN (
-            SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month} AND ${imports.userId} = ${userId}
-          )`
-        : sql`${transactions.importId} IN (
-            SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
-          )`
-      conditions.push(or(dateInMonth!, importInMonth)!)
-    }
+    conditions.push(eq(transactions.referenceMonth, month))
   }
 
   // Filtro por categoria
@@ -209,6 +194,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
       dependentId: null,
       source: 'manual',
       importId: null,
+      referenceMonth: date.substring(0, 7),
       userId: userId ?? null,
     })
     .returning()
@@ -328,23 +314,10 @@ export async function deleteAllByMonth(month: string, userId?: string): Promise<
     throw makeError(422, 'VALIDATION_ERROR', 'Mês inválido. Formato esperado: YYYY-MM.')
   }
 
-  const range = getMonthRange(month)
-  if (!range) {
-    throw makeError(422, 'VALIDATION_ERROR', 'Mês inválido.')
-  }
+  const conditions = [eq(transactions.referenceMonth, month)]
+  if (userId) conditions.push(or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
 
-  const dateInMonth = and(
-    gte(transactions.date, range.firstDay),
-    lte(transactions.date, range.lastDay)
-  )
-  const importInMonth = sql`${transactions.importId} IN (
-    SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
-  )`
-
-  const monthFilter = or(dateInMonth!, importInMonth)!
-  const finalFilter = userId
-    ? and(monthFilter, eq(transactions.userId, userId))!
-    : monthFilter
+  const finalFilter = conditions.length > 1 ? and(...conditions)! : conditions[0]
 
   const result = await db
     .delete(transactions)
@@ -353,7 +326,7 @@ export async function deleteAllByMonth(month: string, userId?: string): Promise<
 
   // Also delete the import records for that month + user
   if (userId) {
-    await db.delete(imports).where(and(eq(imports.referenceMonth, month), eq(imports.userId, userId)))
+    await db.delete(imports).where(and(eq(imports.referenceMonth, month), or(eq(imports.userId, userId), sql`${imports.userId} IS NULL`)!))
   } else {
     await db.delete(imports).where(eq(imports.referenceMonth, month))
   }

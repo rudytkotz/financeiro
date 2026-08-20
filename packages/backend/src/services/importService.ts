@@ -153,6 +153,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
+        referenceMonth,
         userId: userId ?? null,
       }))
     )
@@ -226,6 +227,7 @@ export async function overwriteImport(
         installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
+        referenceMonth: newReferenceMonth,
         userId: userId ?? null,
       }))
     )
@@ -271,6 +273,7 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
       installmentTotal: t.installmentTotal ?? null,
       source: 'csv' as const,
       importId: null,
+      referenceMonth: t.date.substring(0, 7), // derive month from date (YYYY-MM-01)
       userId: userId ?? null,
     }))
   )

@@ -1,6 +1,6 @@
 import { eq, and, gte, lte, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { transactions, categories, dependents, income, imports } from '../db/schema.js'
+import { transactions, categories, dependents, income } from '../db/schema.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,15 +55,10 @@ function getMonthRange(month: string): { firstDay: string; lastDay: string } | n
 }
 
 /**
- * Condição SQL para transações do mês: date no range OU importId vinculado ao mês
+ * Condição SQL para transações do mês: usar referenceMonth diretamente
  */
-function monthCondition(month: string, firstDay: string, lastDay: string) {
-  return sql`(
-    (${transactions.date} >= ${firstDay} AND ${transactions.date} <= ${lastDay})
-    OR ${transactions.importId} IN (
-      SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
-    )
-  )`
+function monthCondition(month: string) {
+  return sql`${transactions.referenceMonth} = ${month}`
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +82,7 @@ export async function getDashboard(month: string, userId?: string): Promise<Dash
   }
 
   const { firstDay, lastDay } = range
-  const monthCond = monthCondition(month, firstDay, lastDay)
+  const monthCond = monthCondition(month)
   const userCond = userId ? sql`(${transactions.userId} = ${userId} OR ${transactions.userId} IS NULL)` : sql`1=1`
   const fullCond = sql`${monthCond} AND ${userCond}`
 
