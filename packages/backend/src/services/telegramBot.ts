@@ -1,7 +1,6 @@
-// node-telegram-bot-api is CommonJS, need createRequire for ESM
-import { createRequire } from 'module'
-const require = createRequire(import.meta.url)
-const TelegramBot = require('node-telegram-bot-api')
+import * as TelegramBotModule from 'node-telegram-bot-api'
+// Handle both default and named exports (CJS/ESM interop)
+const TelegramBot = (TelegramBotModule as any).default ?? TelegramBotModule
 import { eq, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'

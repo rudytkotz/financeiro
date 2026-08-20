@@ -126,7 +126,11 @@ const host = process.env.HOST ?? '0.0.0.0'
 try {
   await app.listen({ port, host })
   console.log(`Backend running on http://${host}:${port}`)
-  startTelegramBot()
+  try {
+    startTelegramBot()
+  } catch (botErr) {
+    console.error('⚠️  Telegram bot failed to start (server continues):', botErr)
+  }
 } catch (err) {
   app.log.error(err)
   process.exit(1)
