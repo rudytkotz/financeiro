@@ -248,8 +248,8 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
 
   // Validar amount (se fornecido)
   if (data.amount !== undefined) {
-    if (data.amount == null || !Number.isInteger(data.amount) || data.amount < 1 || data.amount > 999999999) {
-      throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro entre 1 e 999999999 centavos.')
+    if (data.amount == null || !Number.isInteger(data.amount) || data.amount === 0 || Math.abs(data.amount) > 999999999) {
+      throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro diferente de zero (máx R$ 9.999.999,99).')
     }
     updates.amount = data.amount
   }

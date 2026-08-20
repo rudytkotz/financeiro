@@ -153,6 +153,15 @@ export default function TransactionsPage() {
     await updateMutation.mutateAsync({ id, payload: { paymentMethod: val } as any })
   }, [updateMutation])
 
+  const handleAmountSave = useCallback(async (id: string, displayValue: string, originalCents: number) => {
+    const cleaned = displayValue.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.')
+    const num = Number(cleaned)
+    if (isNaN(num) || num === 0) return
+    const cents = Math.round(num * 100)
+    if (cents === originalCents) return
+    await updateMutation.mutateAsync({ id, payload: { amount: cents } })
+  }, [updateMutation])
+
   // Sort icon component
   function SortBtn({ field, children }: { field: SortField; children: React.ReactNode }) {
     const active = sortField === field
@@ -285,7 +294,7 @@ export default function TransactionsPage() {
                 {transactions.map((t) => (
                   <DesktopRow key={t.id} t={t} categories={categories ?? []} dependents={dependents ?? []}
                     onDescSave={handleDescriptionSave} onCatSave={handleCategorySave}
-                    onPmSave={handlePaymentMethodSave} onDelete={handleOpenDelete} />
+                    onAmountSave={handleAmountSave} onPmSave={handlePaymentMethodSave} onDelete={handleOpenDelete} />
                 ))}
               </tbody>
             </table>
@@ -296,7 +305,7 @@ export default function TransactionsPage() {
             {transactions.map((t) => (
               <MobileCard key={t.id} t={t} categoryMap={categoryMap} categories={categories ?? []} dependents={dependents ?? []}
                 onDescSave={handleDescriptionSave} onCatSave={handleCategorySave}
-                onPmSave={handlePaymentMethodSave} onDelete={handleOpenDelete} />
+                onAmountSave={handleAmountSave} onPmSave={handlePaymentMethodSave} onDelete={handleOpenDelete} />
             ))}
           </div>
         </>
@@ -322,12 +331,14 @@ interface RowProps {
   dependents: Array<{ id: string; name: string }>
   onDescSave: (id: string, v: string, orig: string) => void
   onCatSave: (id: string, v: string, orig: string) => void
+  onAmountSave: (id: string, displayValue: string, originalCents: number) => void
   onPmSave: (id: string, v: string) => void
   onDelete: (t: Transaction) => void
 }
 
-function DesktopRow({ t, categories, dependents, onDescSave, onCatSave, onPmSave, onDelete }: RowProps) {
+function DesktopRow({ t, categories, dependents, onDescSave, onCatSave, onAmountSave, onPmSave, onDelete }: RowProps) {
   const [desc, setDesc] = useState(t.description)
+  const [amountDisplay, setAmountDisplay] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pmInfo = getPaymentMethodInfo((t as any).paymentMethod || 'credito')
 
   return (
@@ -339,8 +350,12 @@ function DesktopRow({ t, categories, dependents, onDescSave, onCatSave, onPmSave
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
           className="w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-sm transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20" />
       </td>
-      <td className={`px-4 py-2.5 text-right text-sm font-medium whitespace-nowrap ${t.amount < 0 ? 'text-green-600' : 'text-gray-900'}`}>
-        {formatCurrency(t.amount)}
+      <td className="px-4 py-2.5 text-right">
+        <input type="text" inputMode="decimal" value={amountDisplay}
+          onChange={(e) => setAmountDisplay(e.target.value)}
+          onBlur={() => onAmountSave(t.id, amountDisplay, t.amount)}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          className={`w-24 text-right rounded-md border border-transparent bg-transparent px-2 py-1 text-sm font-medium transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 ${t.amount < 0 ? 'text-green-600' : 'text-gray-900'}`} />
       </td>
       <td className="px-4 py-2.5 text-center">
         {t.installmentCurrent && t.installmentTotal ? (
@@ -382,8 +397,9 @@ interface MobileCardProps extends RowProps {
   categoryMap: Map<string, string>
 }
 
-function MobileCard({ t, categoryMap, categories, dependents, onDescSave, onCatSave, onPmSave, onDelete }: MobileCardProps) {
+function MobileCard({ t, categoryMap, categories, dependents, onDescSave, onCatSave, onAmountSave, onPmSave, onDelete }: MobileCardProps) {
   const [desc, setDesc] = useState(t.description)
+  const [amountDisplay, setAmountDisplay] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pmInfo = getPaymentMethodInfo((t as any).paymentMethod || 'credito')
   const PmIcon = pmInfo.icon
 
@@ -402,10 +418,12 @@ function MobileCard({ t, categoryMap, categories, dependents, onDescSave, onCatS
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-bold ${t.amount < 0 ? 'text-green-600' : 'text-gray-900'}`}>
-            {formatCurrency(t.amount)}
-          </span>
+        <div className="flex items-center gap-1">
+          <input type="text" inputMode="decimal" value={amountDisplay}
+            onChange={(e) => setAmountDisplay(e.target.value)}
+            onBlur={() => onAmountSave(t.id, amountDisplay, t.amount)}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            className={`w-20 text-right rounded-md border border-transparent bg-transparent px-1 py-0.5 text-sm font-bold transition hover:border-gray-200 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 ${t.amount < 0 ? 'text-green-600' : 'text-gray-900'}`} />
           <button onClick={() => onDelete(t)} className="rounded-md p-1 text-gray-300 hover:text-red-500 hover:bg-red-50">
             <X className="h-3.5 w-3.5" />
           </button>
