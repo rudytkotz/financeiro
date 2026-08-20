@@ -12,7 +12,7 @@ import TransactionModal from '@/components/TransactionModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DependentSelector from '@/components/DependentSelector'
 import type { Transaction } from '@financeiro/shared'
-import { Pencil, Check, X } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from 'lucide-react'
 
 function getCurrentMonth(): string {
   const now = new Date()
@@ -33,11 +33,18 @@ function formatDate(iso: string): string {
   return `${day}/${month}/${year}`
 }
 
+type SortField = 'date' | 'description' | 'amount' | 'category'
+type SortDir = 'asc' | 'desc'
+
 export default function TransactionsPage() {
   const [month, setMonth] = useState(getCurrentMonth)
   const [categoryId, setCategoryId] = useState<string>('')
-  const [startDate, setStartDate] = useState<string>('')
-  const [endDate, setEndDate] = useState<string>('')
+  const [dependentId, setDependentId] = useState<string>('')
+  const [searchText, setSearchText] = useState<string>('')
+
+  // Sort state (client-side)
+  const [sortField, setSortField] = useState<SortField>('date')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -50,28 +57,16 @@ export default function TransactionsPage() {
   // Delete ALL confirmation state
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false)
 
-  // Inline edit state
-  const [inlineEditId, setInlineEditId] = useState<string | null>(null)
-  const [inlineDescription, setInlineDescription] = useState('')
-  const [inlineCategoryId, setInlineCategoryId] = useState('')
-
   const filterParams = useMemo(() => {
     const params: Record<string, string> = { month }
     if (categoryId) {
       params.categoryId = categoryId
     }
-    if (startDate) {
-      params.startDate = startDate
-    }
-    if (endDate) {
-      params.endDate = endDate
-    }
     return params
-  }, [month, categoryId, startDate, endDate])
+  }, [month, categoryId])
 
   const { data: transactionsData, isLoading } = useTransactions(filterParams)
-  const transactions = transactionsData?.transactions ?? []
-  const total = transactionsData?.total ?? 0
+  const rawTransactions = transactionsData?.transactions ?? []
   const { data: categories } = useCategories()
   const { data: dependents } = useDependents()
 
@@ -90,14 +85,68 @@ export default function TransactionsPage() {
     return map
   }, [categories])
 
+  // Client-side filtering and sorting
+  const transactions = useMemo(() => {
+    let filtered = rawTransactions
+
+    // Filter by dependent
+    if (dependentId) {
+      filtered = filtered.filter((t) => t.dependentId === dependentId)
+    }
+
+    // Filter by search text (description)
+    if (searchText.trim()) {
+      const lower = searchText.toLowerCase()
+      filtered = filtered.filter((t) => t.description.toLowerCase().includes(lower))
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'date':
+          cmp = a.date.localeCompare(b.date)
+          break
+        case 'description':
+          cmp = a.description.localeCompare(b.description, 'pt-BR', { sensitivity: 'base' })
+          break
+        case 'amount':
+          cmp = a.amount - b.amount
+          break
+        case 'category':
+          cmp = (categoryMap.get(a.categoryId) ?? '').localeCompare(categoryMap.get(b.categoryId) ?? '', 'pt-BR')
+          break
+      }
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+
+    return sorted
+  }, [rawTransactions, dependentId, searchText, sortField, sortDir, categoryMap])
+
+  const total = useMemo(() => transactions.reduce((sum, t) => sum + t.amount, 0), [transactions])
+
+  // --- Sort handler ---
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((prev) => {
+      if (prev === field) {
+        setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        return field
+      }
+      setSortDir('asc')
+      return field
+    })
+  }, [])
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-gray-400" />
+    return sortDir === 'asc'
+      ? <ArrowUp className="ml-1 inline h-3 w-3" />
+      : <ArrowDown className="ml-1 inline h-3 w-3" />
+  }
+
   // --- Modal handlers ---
   function handleOpenCreate() {
     setEditingTransaction(null)
-    setModalOpen(true)
-  }
-
-  function handleOpenEdit(transaction: Transaction) {
-    setEditingTransaction(transaction)
     setModalOpen(true)
   }
 
@@ -146,35 +195,30 @@ export default function TransactionsPage() {
     setDeleteAllDialogOpen(false)
   }
 
-  // --- Inline edit handlers ---
-  const handleStartInlineEdit = useCallback((t: Transaction) => {
-    setInlineEditId(t.id)
-    setInlineDescription(t.description)
-    setInlineCategoryId(t.categoryId)
-  }, [])
+  // --- Inline field update (debounced on blur/enter) ---
+  const handleDescriptionBlur = useCallback(
+    async (id: string, newValue: string, originalValue: string) => {
+      const trimmed = newValue.trim()
+      if (!trimmed || trimmed === originalValue) return
+      await updateMutation.mutateAsync({ id, payload: { description: trimmed } })
+    },
+    [updateMutation]
+  )
 
-  const handleCancelInlineEdit = useCallback(() => {
-    setInlineEditId(null)
-  }, [])
-
-  const handleSaveInlineEdit = useCallback(async () => {
-    if (!inlineEditId) return
-    const desc = inlineDescription.trim()
-    if (!desc) return
-
-    await updateMutation.mutateAsync({
-      id: inlineEditId,
-      payload: { description: desc, categoryId: inlineCategoryId },
-    })
-    setInlineEditId(null)
-  }, [inlineEditId, inlineDescription, inlineCategoryId, updateMutation])
+  const handleCategoryChange = useCallback(
+    async (id: string, newCategoryId: string, originalCategoryId: string) => {
+      if (newCategoryId === originalCategoryId) return
+      await updateMutation.mutateAsync({ id, payload: { categoryId: newCategoryId } })
+    },
+    [updateMutation]
+  )
 
   return (
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Transações</h1>
         <div className="flex items-center gap-2">
-          {transactions.length > 0 && (
+          {rawTransactions.length > 0 && (
             <button
               onClick={handleOpenDeleteAll}
               className="rounded border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
@@ -191,6 +235,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Filtros */}
       <div className="mt-4 flex flex-wrap items-end gap-4">
         <div>
           <label htmlFor="month-selector" className="mb-1 block text-sm font-medium">
@@ -225,27 +270,34 @@ export default function TransactionsPage() {
         </div>
 
         <div>
-          <label htmlFor="start-date" className="mb-1 block text-sm font-medium">
-            Data início:
+          <label htmlFor="dependent-filter" className="mb-1 block text-sm font-medium">
+            Dependente:
           </label>
-          <input
-            id="start-date"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+          <select
+            id="dependent-filter"
+            value={dependentId}
+            onChange={(e) => setDependentId(e.target.value)}
             className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
+          >
+            <option value="">Todos</option>
+            {dependents?.map((dep) => (
+              <option key={dep.id} value={dep.id}>
+                {dep.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div>
-          <label htmlFor="end-date" className="mb-1 block text-sm font-medium">
-            Data fim:
+          <label htmlFor="search-text" className="mb-1 block text-sm font-medium">
+            Buscar:
           </label>
           <input
-            id="end-date"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            id="search-text"
+            type="text"
+            placeholder="Buscar descrição..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
             className="rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
@@ -253,122 +305,60 @@ export default function TransactionsPage() {
 
       {isLoading ? (
         <p className="mt-6 text-muted-foreground">Carregando...</p>
-      ) : !transactions || transactions.length === 0 ? (
+      ) : transactions.length === 0 ? (
         <p className="mt-6 text-muted-foreground">
           Nenhuma transação encontrada para este período.
         </p>
       ) : (
         <>
-          <div className="mt-6 overflow-x-auto rounded border">
+          <div className="mt-4 text-xs text-gray-500">
+            {transactions.length} transação(ões) • Total: {formatCurrency(total)}
+          </div>
+
+          <div className="mt-2 overflow-x-auto rounded border">
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/50">
                 <tr>
-                  <th className="px-4 py-2 text-left font-medium">Data</th>
-                  <th className="px-4 py-2 text-left font-medium">Descrição</th>
-                  <th className="px-4 py-2 text-right font-medium">Valor (R$)</th>
-                  <th className="px-4 py-2 text-center font-medium">Parcela</th>
-                  <th className="px-4 py-2 text-left font-medium">Categoria</th>
-                  <th className="px-4 py-2 text-left font-medium">Dependente</th>
-                  <th className="px-4 py-2 text-center font-medium">Ações</th>
+                  <th
+                    className="px-3 py-2 text-left font-medium cursor-pointer select-none hover:bg-muted/80"
+                    onClick={() => handleSort('date')}
+                  >
+                    Data <SortIcon field="date" />
+                  </th>
+                  <th
+                    className="px-3 py-2 text-left font-medium cursor-pointer select-none hover:bg-muted/80"
+                    onClick={() => handleSort('description')}
+                  >
+                    Descrição <SortIcon field="description" />
+                  </th>
+                  <th
+                    className="px-3 py-2 text-right font-medium cursor-pointer select-none hover:bg-muted/80"
+                    onClick={() => handleSort('amount')}
+                  >
+                    Valor <SortIcon field="amount" />
+                  </th>
+                  <th className="px-3 py-2 text-center font-medium">Parcela</th>
+                  <th
+                    className="px-3 py-2 text-left font-medium cursor-pointer select-none hover:bg-muted/80"
+                    onClick={() => handleSort('category')}
+                  >
+                    Categoria <SortIcon field="category" />
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium">Dependente</th>
+                  <th className="w-10 px-2 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((t) => (
-                  <tr key={t.id} className="border-b last:border-b-0 hover:bg-muted/30">
-                    <td className="px-4 py-2">{formatDate(t.date)}</td>
-
-                    {/* Descrição - inline editable */}
-                    <td className="px-4 py-2">
-                      {inlineEditId === t.id ? (
-                        <input
-                          type="text"
-                          value={inlineDescription}
-                          onChange={(e) => setInlineDescription(e.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveInlineEdit()
-                            if (e.key === 'Escape') handleCancelInlineEdit()
-                          }}
-                        />
-                      ) : (
-                        <span>{t.description}</span>
-                      )}
-                    </td>
-
-                    <td className={`px-4 py-2 text-right ${t.amount < 0 ? 'text-green-600' : ''}`}>
-                      {formatCurrency(t.amount)}
-                    </td>
-                    <td className="px-4 py-2 text-center text-xs text-gray-500">
-                      {t.installmentCurrent && t.installmentTotal
-                        ? `${t.installmentCurrent}/${t.installmentTotal}`
-                        : '—'}
-                    </td>
-
-                    {/* Categoria - inline editable */}
-                    <td className="px-4 py-2">
-                      {inlineEditId === t.id ? (
-                        <select
-                          value={inlineCategoryId}
-                          onChange={(e) => setInlineCategoryId(e.target.value)}
-                          className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                        >
-                          {categories?.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span>{categoryMap.get(t.categoryId) ?? '—'}</span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-2">
-                      <DependentSelector
-                        transactionId={t.id}
-                        currentDependentId={t.dependentId}
-                        dependents={dependents ?? []}
-                      />
-                    </td>
-
-                    <td className="px-4 py-2 text-center">
-                      {inlineEditId === t.id ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={handleSaveInlineEdit}
-                            className="rounded p-1 text-green-600 hover:bg-green-50"
-                            title="Salvar"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={handleCancelInlineEdit}
-                            className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                            title="Cancelar"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => handleStartInlineEdit(t)}
-                            className="rounded p-1 text-blue-600 hover:bg-blue-50"
-                            title="Editar rápido"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleOpenDelete(t)}
-                            className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
+                  <InlineRow
+                    key={t.id}
+                    transaction={t}
+                    categories={categories ?? []}
+                    dependents={dependents ?? []}
+                    onDescriptionBlur={handleDescriptionBlur}
+                    onCategoryChange={handleCategoryChange}
+                    onDelete={handleOpenDelete}
+                  />
                 ))}
               </tbody>
             </table>
@@ -410,5 +400,102 @@ export default function TransactionsPage() {
         isLoading={deleteAllMutation.isPending}
       />
     </div>
+  )
+}
+
+// --------------------------------------------------------------------------
+// Inline editable row component
+// --------------------------------------------------------------------------
+
+interface InlineRowProps {
+  transaction: Transaction
+  categories: Array<{ id: string; name: string }>
+  dependents: Array<{ id: string; name: string }>
+  onDescriptionBlur: (id: string, newValue: string, original: string) => void
+  onCategoryChange: (id: string, newCatId: string, original: string) => void
+  onDelete: (t: Transaction) => void
+}
+
+function InlineRow({
+  transaction: t,
+  categories,
+  dependents,
+  onDescriptionBlur,
+  onCategoryChange,
+  onDelete,
+}: InlineRowProps) {
+  const [desc, setDesc] = useState(t.description)
+
+  // Sync if server data changes
+  if (desc !== t.description && document.activeElement?.getAttribute('data-txid') !== t.id) {
+    // Only sync if user is not currently editing this field
+  }
+
+  return (
+    <tr className="border-b last:border-b-0 hover:bg-muted/30">
+      <td className="px-3 py-1.5 text-xs">{formatDate(t.date)}</td>
+
+      {/* Descrição - always editable */}
+      <td className="px-3 py-1.5">
+        <input
+          type="text"
+          data-txid={t.id}
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          onBlur={() => onDescriptionBlur(t.id, desc, t.description)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              ;(e.target as HTMLInputElement).blur()
+            }
+          }}
+          className="w-full rounded border border-transparent bg-transparent px-2 py-0.5 text-sm hover:border-gray-300 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+      </td>
+
+      <td className={`px-3 py-1.5 text-right text-sm ${t.amount < 0 ? 'text-green-600 font-medium' : ''}`}>
+        {formatCurrency(t.amount)}
+      </td>
+
+      <td className="px-3 py-1.5 text-center text-xs text-gray-500">
+        {t.installmentCurrent && t.installmentTotal
+          ? `${t.installmentCurrent}/${t.installmentTotal}`
+          : '—'}
+      </td>
+
+      {/* Categoria - always editable */}
+      <td className="px-3 py-1.5">
+        <select
+          value={t.categoryId}
+          onChange={(e) => onCategoryChange(t.id, e.target.value, t.categoryId)}
+          className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-sm hover:border-gray-300 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </td>
+
+      {/* Dependente */}
+      <td className="px-3 py-1.5">
+        <DependentSelector
+          transactionId={t.id}
+          currentDependentId={t.dependentId}
+          dependents={dependents}
+        />
+      </td>
+
+      {/* Delete */}
+      <td className="px-2 py-1.5 text-center">
+        <button
+          onClick={() => onDelete(t)}
+          className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
+          title="Excluir"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </td>
+    </tr>
   )
 }
