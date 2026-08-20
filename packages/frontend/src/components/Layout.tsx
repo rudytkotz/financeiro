@@ -1,22 +1,34 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   ArrowLeftRight,
   Upload,
   Tag,
   Users,
+  Shield,
+  LogOut,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
-
-const navItems = [
-  { to: '/', label: 'Painel', icon: LayoutDashboard },
-  { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
-  { to: '/import', label: 'Importar', icon: Upload },
-  { to: '/categories', label: 'Categorias', icon: Tag },
-  { to: '/dependents', label: 'Dependentes', icon: Users },
-]
+import { useAuth } from '../hooks/useAuth'
 
 export default function Layout() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  const navItems = [
+    { to: '/', label: 'Painel', icon: LayoutDashboard },
+    { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
+    { to: '/import', label: 'Importar', icon: Upload },
+    { to: '/categories', label: 'Categorias', icon: Tag },
+    { to: '/dependents', label: 'Dependentes', icon: Users },
+    ...(user?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
+  ]
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Desktop sidebar */}
@@ -24,26 +36,27 @@ export default function Layout() {
         <div className="flex h-14 items-center border-b px-4">
           <h2 className="text-lg font-semibold">Financeiro</h2>
         </div>
-        <nav className="flex flex-col gap-1 p-2">
+        <nav className="flex flex-1 flex-col gap-1 p-2">
           {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                )
-              }
-            >
+            <NavLink key={to} to={to} end={to === '/'}
+              className={({ isActive }) => cn(
+                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+              )}>
               <Icon className="h-4 w-4" />
               {label}
             </NavLink>
           ))}
         </nav>
+        {/* User + logout */}
+        <div className="border-t p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-gray-600 truncate">{user?.username}</span>
+            <button onClick={handleLogout} className="rounded p-1 text-gray-400 hover:text-red-500 hover:bg-red-50" title="Sair">
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </aside>
 
       {/* Main content */}
@@ -55,20 +68,12 @@ export default function Layout() {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-2 md:hidden safe-bottom">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground'
-              )
-            }
-          >
+        {navItems.slice(0, 5).map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} end={to === '/'}
+            className={({ isActive }) => cn(
+              'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
+              isActive ? 'text-primary' : 'text-muted-foreground'
+            )}>
             <Icon className="h-5 w-5" />
             <span>{label}</span>
           </NavLink>

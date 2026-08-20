@@ -1,5 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
+import fastifyJwt from '@fastify/jwt'
 import fastifyStatic from '@fastify/static'
 import { config } from 'dotenv'
 import * as path from 'path'
@@ -7,6 +8,8 @@ import { fileURLToPath } from 'url'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { Pool } from 'pg'
+import authRoutes from './routes/authRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
 import categoryRoutes from './routes/categoryRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import dependentRoutes from './routes/dependentRoutes.js'
@@ -43,8 +46,30 @@ const app = Fastify({ logger: true })
 
 // CORS para o frontend em desenvolvimento
 await app.register(cors, {
-  origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+  origin: true,
   credentials: true,
+})
+
+// JWT
+await app.register(fastifyJwt, {
+  secret: process.env.JWT_SECRET ?? 'financeiro-secret-key-change-in-production',
+})
+
+// Auth hook: protect all /api routes except /api/auth/* and /api/health
+app.addHook('onRequest', async (request, reply) => {
+  const url = request.url
+  if (
+    url.startsWith('/api/auth/') ||
+    url === '/api/health' ||
+    !url.startsWith('/api/')
+  ) {
+    return // public routes
+  }
+  try {
+    await request.jwtVerify()
+  } catch {
+    return reply.status(401).send({ code: 'UNAUTHORIZED', message: 'Token inválido ou ausente.' })
+  }
 })
 
 // Health check
@@ -53,6 +78,8 @@ app.get('/api/health', async () => {
 })
 
 // Register route plugins
+await app.register(authRoutes)
+await app.register(adminRoutes)
 await app.register(categoryRoutes)
 await app.register(dashboardRoutes)
 await app.register(dependentRoutes)

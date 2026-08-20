@@ -14,6 +14,17 @@ import { sql } from 'drizzle-orm'
 import type { PgColumn } from 'drizzle-orm/pg-core'
 
 // ---------------------------------------------------------------------------
+// users
+// ---------------------------------------------------------------------------
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  username: varchar('username', { length: 50 }).notNull().unique(),
+  passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+  isAdmin: boolean('is_admin').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
 // categories
 // ---------------------------------------------------------------------------
 export const categories = pgTable(
@@ -22,6 +33,7 @@ export const categories = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     name: varchar('name', { length: 50 }).notNull(),
     isDefault: boolean('is_default').notNull().default(false),
+    userId: uuid('user_id').references(() => users.id),
   },
   (table) => ({
     // Functional unique index on lower(name) for case-insensitive uniqueness.
@@ -41,6 +53,7 @@ export const dependents = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: varchar('name', { length: 50 }).notNull(),
+    userId: uuid('user_id').references(() => users.id),
   },
   (table) => ({
     // Functional unique index on lower(name) for case-insensitive uniqueness.
@@ -55,9 +68,10 @@ export const dependents = pgTable(
 // ---------------------------------------------------------------------------
 export const imports = pgTable('imports', {
   id: uuid('id').primaryKey().defaultRandom(),
-  referenceMonth: varchar('reference_month', { length: 7 }).notNull().unique(), // YYYY-MM
+  referenceMonth: varchar('reference_month', { length: 7 }).notNull(),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull(),
   transactionCount: integer('transaction_count').notNull(),
+  userId: uuid('user_id').references(() => users.id),
 })
 
 // ---------------------------------------------------------------------------
@@ -82,6 +96,7 @@ export const transactions = pgTable(
     paymentMethod: varchar('payment_method', { length: 20 }).notNull().default('credito'), // credito | pix | debito | dinheiro | outros
     installmentCurrent: integer('installment_current'), // parcela atual (nullable)
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
+    userId: uuid('user_id').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -102,13 +117,17 @@ export const transactions = pgTable(
 // ---------------------------------------------------------------------------
 export const income = pgTable('income', {
   id: uuid('id').primaryKey().defaultRandom(),
-  month: varchar('month', { length: 7 }).notNull().unique(), // YYYY-MM
+  month: varchar('month', { length: 7 }).notNull(), // YYYY-MM
   amount: bigint('amount', { mode: 'number' }).notNull(), // centavos
+  userId: uuid('user_id').references(() => users.id),
 })
 
 // ---------------------------------------------------------------------------
 // Type inference helpers (used by services)
 // ---------------------------------------------------------------------------
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
+
 export type Category = typeof categories.$inferSelect
 export type NewCategory = typeof categories.$inferInsert
 
