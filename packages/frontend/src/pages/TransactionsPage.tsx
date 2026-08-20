@@ -154,7 +154,7 @@ export default function TransactionsPage() {
   async function handleConfirmDeleteAll() { await deleteAllMutation.mutateAsync(month); setDeleteAllDialogOpen(false) }
 
   const saveDesc = useCallback(async (id: string, v: string, o: string) => { const x = v.trim(); if (!x || x === o) return; await updateMutation.mutateAsync({ id, payload: { description: x } }) }, [updateMutation])
-  const saveCat = useCallback(async (id: string, v: string, o: string) => { if (v === o) return; await updateMutation.mutateAsync({ id, payload: { categoryId: v } }) }, [updateMutation])
+  const saveCat = useCallback(async (id: string, v: string, o: string) => { if (v === o) return; await updateMutation.mutateAsync({ id, payload: { categoryId: v || null } as any }) }, [updateMutation])
   const savePm = useCallback(async (id: string, v: string) => { await updateMutation.mutateAsync({ id, payload: { paymentMethod: v } as any }) }, [updateMutation])
   const saveAmt = useCallback(async (id: string, display: string, orig: number) => {
     const n = Number(display.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.'))
@@ -373,8 +373,9 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
           : <span className="text-gray-200">—</span>}
       </td>
       <td className="px-4 py-3">
-        <select value={t.categoryId} onChange={(e) => onCat(t.id, e.target.value, t.categoryId)}
+        <select value={t.categoryId ?? ''} onChange={(e) => onCat(t.id, e.target.value, t.categoryId ?? '')}
           className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs text-gray-600 transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10">
+          <option value="">Sem categoria</option>
           {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </td>
@@ -437,8 +438,9 @@ function MobCard({ t, cats, deps, catMap, onDesc, onCat, onAmt, onPm, onDel }: M
 
       {/* Bottom chips */}
       <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto">
-        <select value={t.categoryId} onChange={(e) => onCat(t.id, e.target.value, t.categoryId)}
+        <select value={t.categoryId ?? ''} onChange={(e) => onCat(t.id, e.target.value, t.categoryId ?? '')}
           className="flex-shrink-0 rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="">Sem categoria</option>
           {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={(t as any).paymentMethod || 'credito'} onChange={(e) => onPm(t.id, e.target.value)}

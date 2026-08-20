@@ -2,7 +2,6 @@ import { useState, useCallback } from 'react'
 import { FileUpload } from '../components/FileUpload'
 import { parseCsv, type CsvParseResult, type ParsedTransaction } from '../lib/parseCsv'
 import { useImportCsv, type ImportCsvPayload } from '../hooks/useMutations'
-import { useCategories } from '../hooks/useCategories'
 import { useDependents } from '../hooks/useDependents'
 import { AxiosError } from 'axios'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
@@ -61,25 +60,15 @@ export default function ImportPage() {
   const [duplicateModal, setDuplicateModal] = useState<{ referenceMonth: string } | null>(null)
 
   const importCsv = useImportCsv()
-  const { data: categories } = useCategories()
   const { data: dependents } = useDependents()
 
-  const getDefaultCategoryId = (): string => {
-    if (!categories || categories.length === 0) return ''
-    const outros = categories.find(
-      (c) => c.name.toLowerCase() === 'outros' || c.isDefault
-    )
-    return outros?.id ?? categories[0].id
-  }
-
   const buildPayload = (force: boolean): ImportCsvPayload => {
-    const categoryId = getDefaultCategoryId()
     return {
       transactions: editableTransactions.map((tx) => ({
         date: tx.date,
         description: tx.description,
         amount: tx.amount,
-        categoryId,
+        categoryId: null,
         dependentId: null,
         source: 'csv' as const,
         importId: null,

@@ -146,7 +146,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         date: t.date,
         description: t.description,
         amount: t.amount,
-        categoryId: t.categoryId,
+        categoryId: null, // categoria definida pelo usuario
         dependentId: t.dependentId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
@@ -220,7 +220,7 @@ export async function overwriteImport(
         date: t.date,
         description: t.description,
         amount: t.amount,
-        categoryId: t.categoryId,
+        categoryId: null, // categoria definida pelo usuario
         dependentId: t.dependentId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
@@ -266,7 +266,7 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
       date: t.date,
       description: t.description,
       amount: t.amount,
-      categoryId: t.categoryId,
+      categoryId: null, // categoria definida pelo usuario
       dependentId: t.dependentId ?? null,
       portador: t.portador ?? null,
       installmentCurrent: t.installmentCurrent ?? null,

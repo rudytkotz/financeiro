@@ -137,7 +137,7 @@ export interface ImportCsvPayload {
     date: string
     description: string
     amount: number
-    categoryId: string
+    categoryId: string | null
     dependentId: string | null
     source: 'csv'
     importId: string | null

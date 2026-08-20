@@ -36,6 +36,13 @@
       "when": 1724400000000,
       "tag": "0004_add_reference_month_to_transactions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1724500000000,
+      "tag": "0005_category_nullable",
+      "breakpoints": true
     }
   ]
 }

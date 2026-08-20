@@ -86,9 +86,7 @@ export const transactions = pgTable(
     // Stored as centavos. mode:'number' is safe for centavos
     // (max ~R$ 9.999.999,99 = 999_999_999 which fits in a JS number).
     amount: bigint('amount', { mode: 'number' }).notNull(),
-    categoryId: uuid('category_id')
-      .notNull()
-      .references(() => categories.id),
+    categoryId: uuid('category_id').references(() => categories.id), // nullable — preenchido pelo usuário
     dependentId: uuid('dependent_id').references(() => dependents.id), // nullable
     source: varchar('source', { length: 10 }).notNull(), // 'csv' | 'manual'
     importId: uuid('import_id').references(() => imports.id), // nullable

@@ -29,7 +29,7 @@ const postImportsSchema = {
         minItems: 1,
         items: {
           type: 'object',
-          required: ['date', 'description', 'amount', 'categoryId'],
+          required: ['date', 'description', 'amount'],
           properties: {
             date: { type: 'string' },
             description: { type: 'string' },
@@ -123,10 +123,7 @@ function validateTransactions(
       reasons.push('Valor não pode ser zero.')
     }
 
-    // Validate categoryId (non-empty)
-    if (!item.categoryId || item.categoryId.trim().length === 0) {
-      reasons.push('Categoria é obrigatória.')
-    }
+    // categoryId is optional (user sets it later)
 
     if (reasons.length > 0) {
       errors.push({ index: i, reasons })

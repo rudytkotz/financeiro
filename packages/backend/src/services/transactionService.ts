@@ -251,20 +251,20 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
 
   // Validar categoryId (se fornecido)
   if (data.categoryId !== undefined) {
-    if (!data.categoryId) {
-      throw makeError(422, 'VALIDATION_ERROR', 'A categoria é obrigatória.')
-    }
+    if (data.categoryId === null || data.categoryId === '') {
+      updates.categoryId = null
+    } else {
+      const [category] = await db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(eq(categories.id, data.categoryId))
+        .limit(1)
 
-    const [category] = await db
-      .select({ id: categories.id })
-      .from(categories)
-      .where(eq(categories.id, data.categoryId))
-      .limit(1)
-
-    if (!category) {
-      throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
+      if (!category) {
+        throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
+      }
+      updates.categoryId = data.categoryId
     }
-    updates.categoryId = data.categoryId
   }
 
   // Validar paymentMethod (se fornecido)

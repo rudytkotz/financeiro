@@ -5,7 +5,7 @@ export interface Transaction {
   date: string           // ISO 8601 YYYY-MM-DD
   description: string    // max 255 chars
   amount: number         // centavos (integer, negativo = reembolso)
-  categoryId: string
+  categoryId: string | null
   dependentId: string | null
   source: 'csv' | 'manual'
   importId: string | null
