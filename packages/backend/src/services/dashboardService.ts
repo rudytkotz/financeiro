@@ -88,7 +88,7 @@ export async function getDashboard(month: string, userId?: string): Promise<Dash
 
   const { firstDay, lastDay } = range
   const monthCond = monthCondition(month, firstDay, lastDay)
-  const userCond = userId ? sql`${transactions.userId} = ${userId}` : sql`1=1`
+  const userCond = userId ? sql`(${transactions.userId} = ${userId} OR ${transactions.userId} IS NULL)` : sql`1=1`
   const fullCond = sql`${monthCond} AND ${userCond}`
 
   // 1. Total geral de gastos (todas as transações do mês)

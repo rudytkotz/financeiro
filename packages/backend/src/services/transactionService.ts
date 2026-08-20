@@ -93,9 +93,9 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
   const { month, categoryId, startDate, endDate, sort } = params
   const conditions: ReturnType<typeof eq>[] = []
 
-  // Filter by user
+  // Filter by user (include legacy transactions without userId)
   if (userId) {
-    conditions.push(eq(transactions.userId, userId))
+    conditions.push(or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
   }
 
   // Filtro por mês: transações com date no mês OU vinculadas a importação daquele mês
@@ -107,10 +107,13 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
         lte(transactions.date, range.lastDay)
       )
       // Transações importadas cujo import.referenceMonth é o mês selecionado
-      // Usar sql raw para evitar problemas com NULL importId e subquery vazia
-      const importInMonth = sql`${transactions.importId} IN (
-        SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
-      )`
+      const importInMonth = userId
+        ? sql`${transactions.importId} IN (
+            SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month} AND ${imports.userId} = ${userId}
+          )`
+        : sql`${transactions.importId} IN (
+            SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
+          )`
       conditions.push(or(dateInMonth!, importInMonth)!)
     }
   }

@@ -43,7 +43,8 @@ export interface ImportTransaction {
  * Returns a map of lowercase portador name → dependent ID.
  */
 export async function resolvePortadorToDependents(
-  portadorNames: string[]
+  portadorNames: string[],
+  userId?: string
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>()
   if (portadorNames.length === 0) return result
@@ -62,10 +63,10 @@ export async function resolvePortadorToDependents(
     if (existing) {
       result.set(name.toLowerCase(), existing.id)
     } else {
-      // Auto-create dependent
+      // Auto-create dependent with userId
       const [created] = await db
         .insert(dependents)
-        .values({ name })
+        .values({ name, userId: userId ?? null })
         .returning()
       result.set(name.toLowerCase(), created.id)
     }

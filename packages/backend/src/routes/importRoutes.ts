@@ -183,7 +183,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         .map((t) => t.portador)
         .filter((p): p is string => !!p && p.trim().length > 0)
 
-      const portadorMap = await resolvePortadorToDependents(portadorNames)
+      const portadorMap = await resolvePortadorToDependents(portadorNames, getUserId(request))
 
       // Assign dependentId based on portador name
       for (const t of valid) {
