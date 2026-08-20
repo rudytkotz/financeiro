@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { api } from '@/lib/api'
+import { queryClient } from '@/lib/queryClient'
 
 export interface AuthUser {
   id: string
@@ -18,6 +19,8 @@ export function useAuth() {
     localStorage.setItem('auth_token', data.token)
     localStorage.setItem('auth_user', JSON.stringify(data.user))
     setUser(data.user)
+    // Clear all cached data from previous user
+    queryClient.clear()
     return data.user
   }, [])
 
@@ -26,6 +29,7 @@ export function useAuth() {
     localStorage.setItem('auth_token', data.token)
     localStorage.setItem('auth_user', JSON.stringify(data.user))
     setUser(data.user)
+    queryClient.clear()
     return data.user
   }, [])
 
@@ -33,6 +37,7 @@ export function useAuth() {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     setUser(null)
+    queryClient.clear()
   }, [])
 
   return { user, login, register, logout, isAuthenticated: !!user }
