@@ -1,64 +1,38 @@
 import type { FastifyPluginAsync } from 'fastify'
-import {
-  listCategories,
-  createCategory,
-  deleteCategory,
-  type ServiceError,
-} from '../services/categoryService.js'
-
-// JSON Schema for POST /api/categories body validation
-const createCategorySchema = {
-  body: {
-    type: 'object',
-    required: ['name'],
-    properties: {
-      name: { type: 'string' },
-    },
-    additionalProperties: false,
-  },
-} as const
+import { listCategories, createCategory, deleteCategory, type ServiceError } from '../services/categoryService.js'
 
 function isServiceError(err: unknown): err is ServiceError {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'statusCode' in err &&
-    'code' in err &&
-    'message' in err
-  )
+  return typeof err === 'object' && err !== null && 'statusCode' in err && 'code' in err && 'message' in err
+}
+
+function getUserId(request: any): string {
+  return (request.user as { id: string }).id
 }
 
 const categoryRoutes: FastifyPluginAsync = async (app) => {
-  // GET /api/categories — lista todas as categorias
-  app.get('/api/categories', async (_request, reply) => {
-    const categories = await listCategories()
+  app.get('/api/categories', async (request, reply) => {
+    const categories = await listCategories(getUserId(request))
     return reply.send(categories)
   })
 
-  // POST /api/categories — cria categoria personalizada
-  app.post('/api/categories', { schema: createCategorySchema }, async (request, reply) => {
+  app.post('/api/categories', async (request, reply) => {
     const { name } = request.body as { name: string }
     try {
-      const category = await createCategory(name)
+      const category = await createCategory(name, getUserId(request))
       return reply.status(201).send(category)
     } catch (err) {
-      if (isServiceError(err)) {
-        return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      }
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
       throw err
     }
   })
 
-  // DELETE /api/categories/:id — remove categoria personalizada
   app.delete('/api/categories/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     try {
-      await deleteCategory(id)
+      await deleteCategory(id, getUserId(request))
       return reply.status(204).send()
     } catch (err) {
-      if (isServiceError(err)) {
-        return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      }
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
       throw err
     }
   })

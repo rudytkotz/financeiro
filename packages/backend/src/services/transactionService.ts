@@ -89,9 +89,14 @@ function getMonthRange(month: string): { firstDay: string; lastDay: string } | n
  *  - startDate/endDate: filtra por intervalo de datas (ambos devem ser fornecidos e startDate <= endDate)
  *  - sort: 'amount_desc' ordena por amount DESC; 'date_desc' (padrão) ordena por date DESC
  */
-export async function listTransactions(params: ListTransactionsParams = {}): Promise<ListTransactionsResult> {
+export async function listTransactions(params: ListTransactionsParams = {}, userId?: string): Promise<ListTransactionsResult> {
   const { month, categoryId, startDate, endDate, sort } = params
   const conditions: ReturnType<typeof eq>[] = []
+
+  // Filter by user
+  if (userId) {
+    conditions.push(eq(transactions.userId, userId))
+  }
 
   // Filtro por mês: transações com date no mês OU vinculadas a importação daquele mês
   if (month) {
@@ -153,7 +158,7 @@ export async function listTransactions(params: ListTransactionsParams = {}): Pro
  *  - amount: obrigatório, entre 1 e 999999999 centavos
  *  - categoryId: obrigatório, deve existir no banco
  */
-export async function createTransaction(data: CreateTransactionData): Promise<Transaction> {
+export async function createTransaction(data: CreateTransactionData, userId?: string): Promise<Transaction> {
   const { date, description, amount, categoryId } = data
 
   // Validar date
@@ -201,6 +206,7 @@ export async function createTransaction(data: CreateTransactionData): Promise<Tr
       dependentId: null,
       source: 'manual',
       importId: null,
+      userId: userId ?? null,
     })
     .returning()
 
@@ -314,7 +320,7 @@ export async function deleteTransaction(id: string): Promise<void> {
  * Remove todas as transações de um determinado mês (YYYY-MM).
  * Inclui transações com date naquele mês E transações vinculadas a importações daquele mês.
  */
-export async function deleteAllByMonth(month: string): Promise<number> {
+export async function deleteAllByMonth(month: string, userId?: string): Promise<number> {
   if (!month || !/^\d{4}-\d{2}$/.test(month)) {
     throw makeError(422, 'VALIDATION_ERROR', 'Mês inválido. Formato esperado: YYYY-MM.')
   }
@@ -332,13 +338,22 @@ export async function deleteAllByMonth(month: string): Promise<number> {
     SELECT ${imports.id} FROM ${imports} WHERE ${imports.referenceMonth} = ${month}
   )`
 
+  const monthFilter = or(dateInMonth!, importInMonth)!
+  const finalFilter = userId
+    ? and(monthFilter, eq(transactions.userId, userId))!
+    : monthFilter
+
   const result = await db
     .delete(transactions)
-    .where(or(dateInMonth!, importInMonth)!)
+    .where(finalFilter)
     .returning({ id: transactions.id })
 
-  // Also delete the import records for that month
-  await db.delete(imports).where(eq(imports.referenceMonth, month))
+  // Also delete the import records for that month + user
+  if (userId) {
+    await db.delete(imports).where(and(eq(imports.referenceMonth, month), eq(imports.userId, userId)))
+  } else {
+    await db.delete(imports).where(eq(imports.referenceMonth, month))
+  }
 
   return result.length
 }

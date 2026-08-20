@@ -12,6 +12,10 @@ import {
   type ServiceError,
 } from '../services/importService.js'
 
+function getUserId(request: any): string {
+  return (request.user as { id: string }).id
+}
+
 // ---------------------------------------------------------------------------
 // JSON Schema for POST /api/imports body validation
 // ---------------------------------------------------------------------------
@@ -232,7 +236,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       // Se todas as transações eram duplicatas, inserir somente as de outros meses e retornar
       if (transactionsToSave.length === 0) {
         if (otherMonthTransactions.length > 0) {
-          await insertStandaloneTransactions(otherMonthTransactions)
+          await insertStandaloneTransactions(otherMonthTransactions, getUserId(request))
         }
         return reply.status(200).send({
           referenceMonth,
@@ -242,7 +246,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       }
 
       // 4. Se checkDuplicate retorna true e force !== true → retornar 409
-      const isDuplicate = await checkDuplicate(referenceMonth)
+      const isDuplicate = await checkDuplicate(referenceMonth, getUserId(request))
       if (isDuplicate && body.force !== true) {
         return reply.status(409).send({
           isDuplicate: true,
@@ -253,15 +257,15 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       let importRecord
       if (isDuplicate && body.force === true) {
         // 5. Se force = true → chamar overwriteImport
-        importRecord = await overwriteImport(referenceMonth, transactionsToSave)
+        importRecord = await overwriteImport(referenceMonth, transactionsToSave, getUserId(request))
       } else {
         // 6. Caso contrário → chamar saveImport
-        importRecord = await saveImport(transactionsToSave, referenceMonth)
+        importRecord = await saveImport(transactionsToSave, referenceMonth, getUserId(request))
       }
 
       // 7. Inserir parcelas de outros meses (sem importId)
       if (otherMonthTransactions.length > 0) {
-        await insertStandaloneTransactions(otherMonthTransactions)
+        await insertStandaloneTransactions(otherMonthTransactions, getUserId(request))
       }
 
       // 8. Retornar 201 com o registro de importação

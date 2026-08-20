@@ -98,11 +98,14 @@ export function calculateReferenceMonth(transactionList: Pick<ImportTransaction,
  * Verifica se já existe um registro na tabela `imports` com o mês de referência
  * informado. Retorna `true` se duplicado, `false` caso contrário.
  */
-export async function checkDuplicate(referenceMonth: string): Promise<boolean> {
+export async function checkDuplicate(referenceMonth: string, userId?: string): Promise<boolean> {
+  const conditions = [eq(imports.referenceMonth, referenceMonth)]
+  if (userId) conditions.push(eq(imports.userId, userId))
+
   const [existing] = await db
     .select({ id: imports.id })
     .from(imports)
-    .where(eq(imports.referenceMonth, referenceMonth))
+    .where(conditions.length > 1 ? sql`${imports.referenceMonth} = ${referenceMonth} AND ${imports.userId} = ${userId}` : eq(imports.referenceMonth, referenceMonth))
     .limit(1)
 
   return !!existing
@@ -117,7 +120,7 @@ export async function checkDuplicate(referenceMonth: string): Promise<boolean> {
  *
  * Retorna o registro de importação criado.
  */
-export async function saveImport(transactionList: ImportTransaction[], explicitReferenceMonth?: string): Promise<Import> {
+export async function saveImport(transactionList: ImportTransaction[], explicitReferenceMonth?: string, userId?: string): Promise<Import> {
   if (transactionList.length === 0) {
     throw makeError(422, 'VALIDATION_ERROR', 'Nenhuma transação fornecida para importação.')
   }
@@ -132,6 +135,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         referenceMonth,
         importedAt: new Date(),
         transactionCount: transactionList.length,
+        userId: userId ?? null,
       })
       .returning()
 
@@ -148,6 +152,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
+        userId: userId ?? null,
       }))
     )
 
@@ -168,7 +173,8 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
  */
 export async function overwriteImport(
   referenceMonth: string,
-  transactionList: ImportTransaction[]
+  transactionList: ImportTransaction[],
+  userId?: string
 ): Promise<Import> {
   if (transactionList.length === 0) {
     throw makeError(422, 'VALIDATION_ERROR', 'Nenhuma transação fornecida para importação.')
@@ -202,6 +208,7 @@ export async function overwriteImport(
         referenceMonth: newReferenceMonth,
         importedAt: new Date(),
         transactionCount: transactionList.length,
+        userId: userId ?? null,
       })
       .returning()
 
@@ -218,6 +225,7 @@ export async function overwriteImport(
         installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
+        userId: userId ?? null,
       }))
     )
 
@@ -244,12 +252,10 @@ export async function listImports(): Promise<Import[]> {
  * Usado para parcelas expandidas que pertencem a outros meses.
  * Antes de inserir, verifica duplicatas por (date, description, amount, installmentCurrent, installmentTotal).
  */
-export async function insertStandaloneTransactions(transactionList: ImportTransaction[]): Promise<void> {
+export async function insertStandaloneTransactions(transactionList: ImportTransaction[], userId?: string): Promise<void> {
   if (transactionList.length === 0) return
 
-  // Filtrar duplicatas: verificar se já existe transação com mesma date+description+amount+parcela
   const toInsert = await filterDuplicateInstallments(transactionList)
-
   if (toInsert.length === 0) return
 
   await db.insert(transactions).values(
@@ -264,6 +270,7 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
       installmentTotal: t.installmentTotal ?? null,
       source: 'csv' as const,
       importId: null,
+      userId: userId ?? null,
     }))
   )
 }

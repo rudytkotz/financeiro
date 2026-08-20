@@ -70,7 +70,7 @@ function monthCondition(month: string, firstDay: string, lastDay: string) {
 // DashboardService
 // ---------------------------------------------------------------------------
 
-export async function getDashboard(month: string): Promise<DashboardSummary> {
+export async function getDashboard(month: string, userId?: string): Promise<DashboardSummary> {
   const range = getMonthRange(month)
 
   if (!range) {
@@ -88,6 +88,8 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
 
   const { firstDay, lastDay } = range
   const monthCond = monthCondition(month, firstDay, lastDay)
+  const userCond = userId ? sql`${transactions.userId} = ${userId}` : sql`1=1`
+  const fullCond = sql`${monthCond} AND ${userCond}`
 
   // 1. Total geral de gastos (todas as transações do mês)
   const [totalResult] = await db
@@ -95,7 +97,7 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
       total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(monthCond)
+    .where(fullCond)
 
   const totalExpenses = Number(totalResult.total)
 
@@ -105,7 +107,7 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
       total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(sql`${monthCond} AND ${transactions.dependentId} IS NULL`)
+    .where(sql`${fullCond} AND ${transactions.dependentId} IS NULL`)
 
   const totalUserExpenses = Number(userExpensesResult.total)
 
@@ -128,7 +130,7 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
     })
     .from(transactions)
     .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(monthCond)
+    .where(fullCond)
     .groupBy(transactions.categoryId, categories.name)
 
   const expensesByCategory: ExpenseByCategory[] = categoryExpenses.map((row) => {
@@ -150,7 +152,7 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
     })
     .from(transactions)
     .innerJoin(dependents, eq(transactions.dependentId, dependents.id))
-    .where(sql`${monthCond} AND ${transactions.dependentId} IS NOT NULL`)
+    .where(sql`${fullCond} AND ${transactions.dependentId} IS NOT NULL`)
     .groupBy(transactions.dependentId, dependents.name)
 
   const expensesByDependent: ExpenseByDependent[] = dependentExpenses.map((row) => ({
@@ -167,7 +169,7 @@ export async function getDashboard(month: string): Promise<DashboardSummary> {
       count: sql<string>`COUNT(*)`,
     })
     .from(transactions)
-    .where(monthCond)
+    .where(fullCond)
     .groupBy(transactions.paymentMethod)
 
   const expensesByPaymentMethod: ExpenseByPaymentMethod[] = paymentMethodExpenses.map((row) => ({
