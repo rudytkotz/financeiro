@@ -1,5 +1,7 @@
-// @ts-ignore - node-telegram-bot-api has no proper ESM types
-import TelegramBot from 'node-telegram-bot-api'
+// node-telegram-bot-api is CommonJS, need createRequire for ESM
+import { createRequire } from 'module'
+const require = createRequire(import.meta.url)
+const TelegramBot = require('node-telegram-bot-api')
 import { eq, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'
