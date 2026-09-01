@@ -56,9 +56,11 @@ export const dependents = pgTable(
     userId: uuid('user_id').references(() => users.id),
   },
   (table) => ({
-    // Functional unique index on lower(name) for case-insensitive uniqueness.
-    nameUniqueIdx: uniqueIndex('dependents_name_lower_idx').on(
-      sql`lower(${table.name})` as unknown as PgColumn
+    // Unique index composto: unicidade de lower(name) dentro do mesmo usuário.
+    // Permite que dois usuários diferentes tenham dependentes com o mesmo nome.
+    nameUserUniqueIdx: uniqueIndex('dependents_name_user_lower_idx').on(
+      sql`lower(${table.name})` as unknown as PgColumn,
+      table.userId as unknown as PgColumn
     ),
   })
 )

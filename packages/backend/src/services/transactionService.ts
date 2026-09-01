@@ -39,6 +39,8 @@ export interface CreateTransactionData {
   description: string
   amount: number
   categoryId: string
+  operationType?: 'despesa' | 'reembolso'
+  installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
 }
 
 export interface UpdateTransactionData {
@@ -47,6 +49,7 @@ export interface UpdateTransactionData {
   amount?: number
   categoryId?: string
   paymentMethod?: string
+  operationType?: 'despesa' | 'reembolso'
 }
 
 // ---------------------------------------------------------------------------
@@ -143,11 +146,25 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
  * Validações:
  *  - date: obrigatório, formato YYYY-MM-DD
  *  - description: obrigatório, máximo 255 caracteres
- *  - amount: obrigatório, entre 1 e 999999999 centavos
+ *  - amount: obrigatório, diferente de zero, máx abs 999999999 centavos
+ *    - positivo para despesas, negativo para reembolsos
+ *  - operationType: opcional — 'despesa' (padrão) ou 'reembolso'
+ *    - se 'reembolso', o amount é automaticamente negado (valor absoluto)
+ *    - se 'despesa', o amount é sempre positivo
  *  - categoryId: obrigatório, deve existir no banco
  */
 export async function createTransaction(data: CreateTransactionData, userId?: string): Promise<Transaction> {
-  const { date, description, amount, categoryId } = data
+  const { date, description, categoryId, operationType } = data
+  let { amount } = data
+
+  // Aplicar sinal baseado no tipo de operação
+  if (operationType === 'reembolso') {
+    // Reembolso: garantir que o valor seja negativo
+    amount = -Math.abs(amount)
+  } else {
+    // Despesa (padrão): garantir que o valor seja positivo
+    amount = Math.abs(amount)
+  }
 
   // Validar date
   if (!date || !isValidDate(date)) {
@@ -163,9 +180,9 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
     throw makeError(422, 'VALIDATION_ERROR', 'A descrição deve ter no máximo 255 caracteres.')
   }
 
-  // Validar amount
-  if (amount == null || !Number.isInteger(amount) || amount < 1 || amount > 999999999) {
-    throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro entre 1 e 999999999 centavos.')
+  // Validar amount (após aplicar sinal)
+  if (amount == null || !Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 999999999) {
+    throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro diferente de zero (máx R$ 9.999.999,99).')
   }
 
   // Validar categoryId
@@ -183,23 +200,77 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
     throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
   }
 
-  // Inserir transação
-  const [created] = await db
-    .insert(transactions)
-    .values({
-      date,
+  // Validar installmentTotal (se fornecido)
+  const parsedInstallments = data.installmentTotal ?? 1
+  if (!Number.isInteger(parsedInstallments) || parsedInstallments < 1 || parsedInstallments > 24) {
+    throw makeError(422, 'VALIDATION_ERROR', 'O número de parcelas deve ser entre 1 e 24.')
+  }
+
+  // Inserir transação (ou múltiplas parcelas)
+  if (parsedInstallments === 1) {
+    // Sem parcelamento — inserção simples
+    const [created] = await db
+      .insert(transactions)
+      .values({
+        date,
+        description: trimmedDesc,
+        amount,
+        categoryId,
+        dependentId: null,
+        source: 'manual',
+        importId: null,
+        referenceMonth: date.substring(0, 7),
+        userId: userId ?? null,
+      })
+      .returning()
+
+    return created
+  }
+
+  // Com parcelamento — inserir N registros, um por mês
+  // O valor de cada parcela é Math.round(total / N); a primeira parcela absorve o centavo residual
+  const perInstallment = Math.floor(Math.abs(amount) / parsedInstallments)
+  const remainder = Math.abs(amount) - perInstallment * parsedInstallments
+  const signedPer = amount < 0 ? -perInstallment : perInstallment
+
+  const [baseYear, baseMonth, baseDay] = date.split('-').map(Number)
+
+  const rows = Array.from({ length: parsedInstallments }, (_, i) => {
+    // Avança i meses a partir da data base
+    const d = new Date(baseYear, baseMonth - 1 + i, 1)
+    // Usa o mesmo dia da data original, ou o último dia do mês se ultrapassar
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    const day = Math.min(baseDay, lastDay)
+    const installDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    const refMonth = installDate.substring(0, 7)
+
+    // Primeira parcela recebe o centavo residual
+    const installAmount = i === 0
+      ? (amount < 0 ? -(perInstallment + remainder) : perInstallment + remainder)
+      : signedPer
+
+    return {
+      date: installDate,
       description: trimmedDesc,
-      amount,
+      amount: installAmount,
       categoryId,
-      dependentId: null,
-      source: 'manual',
-      importId: null,
-      referenceMonth: date.substring(0, 7),
+      dependentId: null as string | null,
+      source: 'manual' as const,
+      importId: null as string | null,
+      referenceMonth: refMonth,
+      installmentCurrent: i + 1,
+      installmentTotal: parsedInstallments,
       userId: userId ?? null,
-    })
+    }
+  })
+
+  const created = await db
+    .insert(transactions)
+    .values(rows)
     .returning()
 
-  return created
+  // Retorna a primeira parcela como resposta principal
+  return created[0]
 }
 
 /**
@@ -243,10 +314,25 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
 
   // Validar amount (se fornecido)
   if (data.amount !== undefined) {
-    if (data.amount == null || !Number.isInteger(data.amount) || data.amount === 0 || Math.abs(data.amount) > 999999999) {
+    let amount = data.amount
+    // Aplicar sinal baseado no tipo de operação (se fornecido junto com amount)
+    if (data.operationType === 'reembolso') {
+      amount = -Math.abs(amount)
+    } else if (data.operationType === 'despesa') {
+      amount = Math.abs(amount)
+    }
+    if (amount == null || !Number.isInteger(amount) || amount === 0 || Math.abs(amount) > 999999999) {
       throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro diferente de zero (máx R$ 9.999.999,99).')
     }
-    updates.amount = data.amount
+    updates.amount = amount
+  } else if (data.operationType !== undefined && data.amount === undefined) {
+    // operationType mudou mas amount não foi enviado: recalcular o sinal do amount existente
+    const currentAmount = existing.amount
+    if (data.operationType === 'reembolso') {
+      updates.amount = -Math.abs(currentAmount)
+    } else if (data.operationType === 'despesa') {
+      updates.amount = Math.abs(currentAmount)
+    }
   }
 
   // Validar categoryId (se fornecido)
@@ -380,7 +466,8 @@ export interface AssociateDependentConflict {
  */
 export async function associateDependent(
   id: string,
-  data: AssociateDependentData
+  data: AssociateDependentData,
+  userId?: string
 ): Promise<{ transaction: Transaction } | { conflict: AssociateDependentConflict }> {
   const { dependentId, force } = data
 
@@ -419,11 +506,15 @@ export async function associateDependent(
     return { transaction: updated }
   }
 
-  // Verificar se o dependente existe
+  // Verificar se o dependente existe E pertence ao usuário
+  const dependentConditions = [eq(dependents.id, dependentId)]
+  if (userId) {
+    dependentConditions.push(or(eq(dependents.userId, userId), sql`${dependents.userId} IS NULL`)!)
+  }
   const [dependent] = await db
     .select({ id: dependents.id })
     .from(dependents)
-    .where(eq(dependents.id, dependentId))
+    .where(and(...dependentConditions))
     .limit(1)
 
   if (!dependent) {

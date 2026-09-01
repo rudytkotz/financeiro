@@ -19,17 +19,30 @@ export interface CsvParseResult {
 /**
  * Normalizes column header names to canonical form.
  * Supports multiple bank formats:
- * - data/date → date
+ * - data/date/data de compra → date
  * - descrição/description/estabelecimento → description
- * - valor/value → value
- * - portador → (ignored, used for dependent detection)
+ * - valor/value/valor (em r$) → value
+ * - portador/nome no cartão → portador
+ * - parcela/installment/parcelas → installment
  */
 function normalizeHeader(header: string): string | null {
-  const h = header.trim().toLowerCase().normalize('NFC')
-  if (h === 'data' || h === 'date') return 'date'
-  if (h === 'descrição' || h === 'descricao' || h === 'description' || h === 'estabelecimento') return 'description'
-  if (h === 'valor' || h === 'value') return 'value'
-  if (h === 'portador') return 'portador'
+  // Normalize: remove accents, lowercase, collapse whitespace
+  const h = header
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove diacritics
+    .replace(/\s+/g, ' ')
+
+  if (h === 'data' || h === 'date' || h === 'data de compra') return 'date'
+  if (
+    h === 'descricao' ||
+    h === 'description' ||
+    h === 'estabelecimento'
+  )
+    return 'description'
+  if (h === 'valor' || h === 'value' || h === 'valor (em r$)') return 'value'
+  if (h === 'portador' || h === 'nome no cartao') return 'portador'
   if (h === 'parcela' || h === 'installment' || h === 'parcelas') return 'installment'
   return null
 }
@@ -122,12 +135,16 @@ function removeBom(text: string): string {
 }
 
 /**
- * Parses installment string like "4 de 7", "4/7", "04/07".
- * Returns { current, total } or null if not an installment (e.g., "-" or empty).
+ * Parses installment string like "4 de 7", "4/7", "04/07", "Única".
+ * Returns { current, total } or null if not an installment (e.g., "-", "Única", or empty).
+ * "Única" means a single one-time charge — treated as no installment.
  */
 function parseInstallment(raw: string): { current: number; total: number } | null {
   const trimmed = raw.trim()
   if (!trimmed || trimmed === '-') return null
+
+  // "Única" / "Unica" = à vista, sem parcela
+  if (trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === 'unica') return null
 
   // Try "4 de 7" format
   const deMatch = trimmed.match(/^(\d+)\s*de\s*(\d+)$/i)

@@ -145,7 +145,7 @@ export default function TransactionsPage() {
   const clearFilters = () => { setCategoryId(''); setDependentId(''); setPaymentMethodFilter(''); setSearchText('') }
   function handleOpenCreate() { setEditingTransaction(null); setModalOpen(true) }
   function handleCloseModal() { setModalOpen(false); setEditingTransaction(null) }
-  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string }) {
+  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; operationType: 'despesa' | 'reembolso'; installmentTotal: number }) {
     if (editingTransaction) await updateMutation.mutateAsync({ id: editingTransaction.id, payload: data })
     else await createMutation.mutateAsync(data)
   }
@@ -362,10 +362,15 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
           className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-[13px] text-gray-800 transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10" />
       </td>
       <td className="px-4 py-3 text-right">
-        <input type="text" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)}
-          onBlur={() => onAmt(t.id, amt, t.amount)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-          className={`w-[90px] text-right rounded-lg border border-transparent bg-transparent px-2 py-1 text-[13px] font-semibold transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10 ${t.amount < 0 ? 'text-emerald-600' : 'text-gray-800'}`} />
+        <div className="flex flex-col items-end gap-0.5">
+          <input type="text" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)}
+            onBlur={() => onAmt(t.id, amt, t.amount)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            className={`w-[90px] text-right rounded-lg border border-transparent bg-transparent px-2 py-1 text-[13px] font-semibold transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10 ${t.amount < 0 ? 'text-emerald-600' : 'text-gray-800'}`} />
+          {t.amount < 0 && (
+            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500 px-1">Reembolso</span>
+          )}
+        </div>
       </td>
       <td className="px-4 py-3 text-center">
         {t.installmentCurrent && t.installmentTotal
@@ -420,10 +425,15 @@ function MobCard({ t, cats, deps, catMap, onDesc, onCat, onAmt, onPm, onDel }: M
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <input type="text" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)}
-            onBlur={() => onAmt(t.id, amt, t.amount)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            className={`w-24 text-right rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-base font-bold transition focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 ${t.amount < 0 ? 'text-emerald-600' : 'text-gray-900'}`} />
+          <div className="flex flex-col items-end gap-0.5">
+            <input type="text" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)}
+              onBlur={() => onAmt(t.id, amt, t.amount)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              className={`w-24 text-right rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-base font-bold transition focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 ${t.amount < 0 ? 'text-emerald-600' : 'text-gray-900'}`} />
+            {t.amount < 0 && (
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-500">Reembolso</span>
+            )}
+          </div>
           <button onClick={() => onDel(t)} className="rounded-lg p-1.5 text-gray-200 hover:text-red-500 hover:bg-red-50 transition">
             <X className="h-4 w-4" />
           </button>

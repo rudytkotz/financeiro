@@ -84,7 +84,7 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string }
     const body = request.body as AssociateDependentData
     try {
-      const result = await associateDependent(id, body)
+      const result = await associateDependent(id, body, getUserId(request))
       if ('conflict' in result) return reply.status(409).send(result.conflict)
       return reply.status(200).send(result.transaction)
     } catch (err) {

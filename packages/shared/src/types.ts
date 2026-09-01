@@ -80,8 +80,10 @@ export interface CsvParseResult {
 export interface CreateTransactionPayload {
   date: string
   description: string
-  amount: number         // centavos
+  amount: number         // centavos (valor absoluto — o sinal é definido por operationType)
   categoryId: string
+  operationType?: 'despesa' | 'reembolso'  // 'despesa' = positivo (padrão); 'reembolso' = negativo
+  installmentTotal?: number                // 1 ou undefined = à vista; 2–24 = parcelado
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
