@@ -7,11 +7,22 @@ function getUserId(request: any): string {
 
 const dashboardRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/dashboard', async (request, reply) => {
-    const { month } = request.query as { month?: string }
+    const { month, dependentId, paymentMethod } = request.query as {
+      month?: string
+      dependentId?: string   // 'none' = sem dependente (pessoal), uuid = filtrar por dependente
+      paymentMethod?: string
+    }
     if (!month) {
       return reply.status(422).send({ code: 'VALIDATION_ERROR', message: 'Parâmetro month obrigatório.' })
     }
-    const summary = await getDashboard(month, getUserId(request))
+
+    // Traduz 'none' para null (transações sem dependente)
+    const resolvedDependentId = dependentId === 'none' ? null : dependentId
+
+    const summary = await getDashboard(month, getUserId(request), {
+      dependentId: resolvedDependentId,
+      paymentMethod: paymentMethod || undefined,
+    })
     return reply.send(summary)
   })
 }

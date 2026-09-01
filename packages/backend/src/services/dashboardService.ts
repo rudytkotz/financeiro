@@ -65,7 +65,12 @@ function monthCondition(month: string) {
 // DashboardService
 // ---------------------------------------------------------------------------
 
-export async function getDashboard(month: string, userId?: string): Promise<DashboardSummary> {
+export interface DashboardFilters {
+  dependentId?: string | null   // null = sem dependente (pessoal), undefined = todos
+  paymentMethod?: string        // filtra por forma de pagamento
+}
+
+export async function getDashboard(month: string, userId?: string, filters: DashboardFilters = {}): Promise<DashboardSummary> {
   const range = getMonthRange(month)
 
   if (!range) {
@@ -116,7 +121,22 @@ export async function getDashboard(month: string, userId?: string): Promise<Dash
   const incomeAmount = incomeRecord ? incomeRecord.amount : 0
   const balance = incomeAmount - totalExpenses
 
-  // 4. Gastos por categoria (todas as transações)
+  // 4. Gastos por categoria (com filtros opcionais de dependente e forma de pagamento)
+  // Monta condições extras de forma segura usando Drizzle ORM
+  const catExtraConds: ReturnType<typeof eq>[] = []
+  if (filters.dependentId === null) {
+    catExtraConds.push(isNull(transactions.dependentId) as any)
+  } else if (filters.dependentId) {
+    catExtraConds.push(eq(transactions.dependentId, filters.dependentId) as any)
+  }
+  if (filters.paymentMethod) {
+    catExtraConds.push(eq(transactions.paymentMethod, filters.paymentMethod) as any)
+  }
+
+  const catCond = catExtraConds.length > 0
+    ? and(fullCond, ...catExtraConds)!
+    : fullCond
+
   const categoryExpenses = await db
     .select({
       categoryId: transactions.categoryId,
@@ -125,7 +145,7 @@ export async function getDashboard(month: string, userId?: string): Promise<Dash
     })
     .from(transactions)
     .innerJoin(categories, eq(transactions.categoryId, categories.id))
-    .where(fullCond)
+    .where(catCond)
     .groupBy(transactions.categoryId, categories.name)
 
   const expensesByCategory: ExpenseByCategory[] = categoryExpenses.map((row) => {

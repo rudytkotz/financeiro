@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { useDashboard } from '@/hooks/useDashboard'
+import { useDependents } from '@/hooks/useDependents'
 import { useSetIncome } from '@/hooks/useMutations'
-import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign } from 'lucide-react'
+import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal } from 'lucide-react'
 
 const CATEGORY_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -39,7 +40,14 @@ function formatMonthLabel(month: string): string {
 
 export default function DashboardPage() {
   const [month, setMonth] = useState(getCurrentMonth)
-  const { data: dashboard, isLoading } = useDashboard(month)
+  const [catDependentId, setCatDependentId] = useState('')
+  const [catPaymentMethod, setCatPaymentMethod] = useState('')
+  const { data: dashboard, isLoading } = useDashboard({
+    month,
+    dependentId: catDependentId || undefined,
+    paymentMethod: catPaymentMethod || undefined,
+  })
+  const { data: dependents } = useDependents()
 
   const hasNoData =
     dashboard &&
@@ -162,7 +170,37 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Gráfico de pizza — Distribuição por categoria */}
             <div className="rounded-xl border bg-white p-6 shadow-sm">
-              <h2 className="text-base font-semibold text-gray-900 mb-4">Gastos por categoria</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-base font-semibold text-gray-900">Gastos por categoria</h2>
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                  {/* Filtro por dependente */}
+                  <select
+                    value={catDependentId}
+                    onChange={(e) => setCatDependentId(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
+                    aria-label="Filtrar por dependente"
+                  >
+                    <option value="">Todos os dependentes</option>
+                    <option value="none">Pessoal (sem dependente)</option>
+                    {(dependents ?? []).map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {/* Filtro por forma de pagamento */}
+                  <select
+                    value={catPaymentMethod}
+                    onChange={(e) => setCatPaymentMethod(e.target.value)}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
+                    aria-label="Filtrar por forma de pagamento"
+                  >
+                    <option value="">Todas as formas</option>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([value, { label }]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {(dashboard.expensesByCategory ?? []).length === 0 ? (
                 <p className="text-gray-500 text-sm">Nenhum dado disponível.</p>
               ) : (

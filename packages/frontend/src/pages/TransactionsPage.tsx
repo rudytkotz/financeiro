@@ -182,10 +182,29 @@ export default function TransactionsPage() {
           <h1 className="text-xl font-bold text-gray-900 md:text-2xl">Transações</h1>
           <p className="text-xs text-gray-400 mt-0.5">{getMonthLabel(month)}</p>
         </div>
-        <button onClick={handleOpenCreate}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition active:scale-95">
-          <Plus className="h-4 w-4" /> Nova
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Total do mês — visível quando há transações */}
+          {rawTransactions.length > 0 && (
+            <div className={`rounded-xl px-3 py-1.5 text-sm font-bold ${total < 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-800'}`}>
+              {formatCurrency(total)}
+            </div>
+          )}
+          {/* Excluir todas — fora do painel de filtros */}
+          {rawTransactions.length > 0 && (
+            <button
+              onClick={() => setDeleteAllDialogOpen(true)}
+              title="Excluir todas as transações do mês"
+              aria-label="Excluir todas as transações do mês"
+              className="rounded-xl border border-red-200 bg-white p-2 text-red-400 hover:bg-red-50 hover:text-red-600 transition active:scale-95"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          <button onClick={handleOpenCreate}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground shadow-md hover:bg-primary/90 transition active:scale-95">
+            <Plus className="h-4 w-4" /> Nova
+          </button>
+        </div>
       </div>
 
       {/* ── MONTH NAV ── */}
@@ -216,9 +235,6 @@ export default function TransactionsPage() {
               </button>
             )
           })}
-          <div className={`flex-shrink-0 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-900 px-3 py-2 text-xs font-bold text-white`}>
-            Total: {formatShortCurrency(total)}
-          </div>
         </div>
       )}
 
@@ -248,7 +264,7 @@ export default function TransactionsPage() {
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Filtros avançados</span>
             {activeFilterCount > 0 && <button onClick={clearFilters} className="text-[11px] text-primary font-medium hover:underline">Limpar</button>}
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-[10px] font-semibold text-gray-400 uppercase">Tipo</label>
               <select value={paymentMethodFilter} onChange={(e) => setPaymentMethodFilter(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary">
@@ -269,13 +285,6 @@ export default function TransactionsPage() {
                 <option value="">Todos</option>
                 {(dependents ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
-            </div>
-            <div className="flex items-end">
-              {rawTransactions.length > 0 && (
-                <button onClick={() => setDeleteAllDialogOpen(true)} className="w-full rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 transition">
-                  Excluir todas
-                </button>
-              )}
             </div>
           </div>
         </div>
