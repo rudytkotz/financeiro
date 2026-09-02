@@ -41,6 +41,7 @@ export interface CreateTransactionData {
   categoryId: string
   operationType?: 'despesa' | 'reembolso'
   installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
+  paymentMethod?: string
 }
 
 export interface UpdateTransactionData {
@@ -154,7 +155,7 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
  *  - categoryId: obrigatório, deve existir no banco
  */
 export async function createTransaction(data: CreateTransactionData, userId?: string): Promise<Transaction> {
-  const { date, description, categoryId, operationType } = data
+  const { date, description, categoryId, operationType, paymentMethod } = data
   let { amount } = data
 
   // Aplicar sinal baseado no tipo de operação
@@ -220,6 +221,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
         source: 'manual',
         importId: null,
         referenceMonth: date.substring(0, 7),
+        paymentMethod: paymentMethod ?? 'credito',
         userId: userId ?? null,
       })
       .returning()
@@ -260,6 +262,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
       referenceMonth: refMonth,
       installmentCurrent: i + 1,
       installmentTotal: parsedInstallments,
+      paymentMethod: paymentMethod ?? 'credito',
       userId: userId ?? null,
     }
   })

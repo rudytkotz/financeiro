@@ -145,7 +145,7 @@ export default function TransactionsPage() {
   const clearFilters = () => { setCategoryId(''); setDependentId(''); setPaymentMethodFilter(''); setSearchText('') }
   function handleOpenCreate() { setEditingTransaction(null); setModalOpen(true) }
   function handleCloseModal() { setModalOpen(false); setEditingTransaction(null) }
-  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; operationType: 'despesa' | 'reembolso'; installmentTotal: number }) {
+  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string }) {
     if (editingTransaction) await updateMutation.mutateAsync({ id: editingTransaction.id, payload: data })
     else await createMutation.mutateAsync(data)
   }

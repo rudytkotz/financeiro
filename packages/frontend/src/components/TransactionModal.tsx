@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Transaction, Category } from '@financeiro/shared'
-import { ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, CreditCard, Smartphone, Wallet, Banknote } from 'lucide-react'
 
 type OperationType = 'despesa' | 'reembolso'
+
+const PAYMENT_METHODS = [
+  { value: 'credito',   label: 'Crédito',   icon: CreditCard },
+  { value: 'debito',    label: 'Débito',     icon: Wallet },
+  { value: 'pix',       label: 'Pix',        icon: Smartphone },
+  { value: 'dinheiro',  label: 'Dinheiro',   icon: Banknote },
+  { value: 'outros',    label: 'Outros',     icon: Wallet },
+] as const
 
 export interface TransactionModalProps {
   open: boolean
@@ -14,6 +22,7 @@ export interface TransactionModalProps {
     categoryId: string
     operationType: OperationType
     installmentTotal: number
+    paymentMethod: string
   }) => Promise<void>
   categories: Category[]
   transaction?: Transaction | null
@@ -64,6 +73,7 @@ export default function TransactionModal({
   const [amountDisplay, setAmountDisplay] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [operationType, setOperationType] = useState<OperationType>('despesa')
+  const [paymentMethod, setPaymentMethod] = useState('credito')
   const [installmentTotal, setInstallmentTotal] = useState(1)
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
@@ -78,6 +88,7 @@ export default function TransactionModal({
         setAmountDisplay(centsToBrl(transaction.amount))
         setCategoryId(transaction.categoryId ?? '')
         setOperationType(detectOperationType(transaction.amount))
+        setPaymentMethod((transaction as any).paymentMethod ?? 'credito')
         setInstallmentTotal(transaction.installmentTotal ?? 1)
       } else {
         setDate('')
@@ -85,6 +96,7 @@ export default function TransactionModal({
         setAmountDisplay('')
         setCategoryId('')
         setOperationType('despesa')
+        setPaymentMethod('credito')
         setInstallmentTotal(1)
       }
       setErrors({})
@@ -163,6 +175,7 @@ export default function TransactionModal({
         categoryId,
         operationType,
         installmentTotal,
+        paymentMethod,
       })
       onClose()
     } catch (err: unknown) {
@@ -334,6 +347,29 @@ export default function TransactionModal({
             {errors.categoryId && (
               <p className="mt-1 text-xs text-red-600">{errors.categoryId}</p>
             )}
+          </div>
+
+          {/* Forma de Pagamento */}
+          <div className="mb-4">
+            <span className="mb-1.5 block text-sm font-medium">Forma de pagamento</span>
+            <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Forma de pagamento">
+              {PAYMENT_METHODS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPaymentMethod(value)}
+                  aria-pressed={paymentMethod === value}
+                  className={`flex flex-col items-center gap-1 rounded-lg border px-1 py-2 text-[10px] font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                    paymentMethod === value
+                      ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                      : 'border-gray-200 bg-white text-gray-400 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Parcelamento — disponível apenas em criação, não em edição */}
