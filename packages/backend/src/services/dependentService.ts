@@ -1,4 +1,4 @@
-import { eq, sql, and, count, or, isNull } from 'drizzle-orm'
+import { eq, sql, and, count } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { dependents, transactions } from '../db/schema.js'
 import type { Dependent } from '../db/schema.js'
@@ -17,7 +17,7 @@ export async function listDependents(userId: string): Promise<Dependent[]> {
   return db
     .select()
     .from(dependents)
-    .where(or(eq(dependents.userId, userId), isNull(dependents.userId)))
+    .where(eq(dependents.userId, userId))
     .orderBy(dependents.name)
 }
 
@@ -31,7 +31,7 @@ export async function createDependent(name: string, userId: string): Promise<Dep
     .from(dependents)
     .where(and(
       sql`lower(${dependents.name}) = lower(${trimmed})`,
-      or(eq(dependents.userId, userId), isNull(dependents.userId))
+      eq(dependents.userId, userId)
     ))
     .limit(1)
 
@@ -40,7 +40,7 @@ export async function createDependent(name: string, userId: string): Promise<Dep
   const [{ total }] = await db
     .select({ total: count() })
     .from(dependents)
-    .where(or(eq(dependents.userId, userId), isNull(dependents.userId)))
+    .where(eq(dependents.userId, userId))
 
   if (total >= 10) throw makeError(422, 'LIMIT_REACHED', 'O limite máximo de 10 dependentes foi atingido.')
 
@@ -60,5 +60,5 @@ export async function deleteDependent(id: string, userId: string): Promise<void>
 
   if (total > 0) throw makeError(409, 'HAS_TRANSACTIONS', 'Não é possível remover este dependente pois existem transações vinculadas.')
 
-  await db.delete(dependents).where(and(eq(dependents.id, id), or(eq(dependents.userId, userId), isNull(dependents.userId))))
+  await db.delete(dependents).where(and(eq(dependents.id, id), eq(dependents.userId, userId)))
 }

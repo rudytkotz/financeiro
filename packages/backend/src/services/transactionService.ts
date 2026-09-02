@@ -509,7 +509,7 @@ export async function associateDependent(
   // Verificar se o dependente existe E pertence ao usuário
   const dependentConditions = [eq(dependents.id, dependentId)]
   if (userId) {
-    dependentConditions.push(or(eq(dependents.userId, userId), sql`${dependents.userId} IS NULL`)!)
+    dependentConditions.push(eq(dependents.userId, userId))
   }
   const [dependent] = await db
     .select({ id: dependents.id })
