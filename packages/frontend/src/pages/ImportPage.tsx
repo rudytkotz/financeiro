@@ -2,17 +2,8 @@ import { useState, useCallback } from 'react'
 import { FileUpload } from '../components/FileUpload'
 import { parseCsv, type CsvParseResult, type ParsedTransaction } from '../lib/parseCsv'
 import { useImportCsv, type ImportCsvPayload } from '../hooks/useMutations'
-import { useDependents } from '../hooks/useDependents'
 import { AxiosError } from 'axios'
-import { Pencil, Trash2, Check, X } from 'lucide-react'
-
-function formatCurrency(cents: number): string {
-  const prefix = cents < 0 ? '-' : ''
-  return prefix + (Math.abs(cents) / 100).toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
+import { Trash2 } from 'lucide-react'
 
 function formatCurrencyInput(cents: number): string {
   const prefix = cents < 0 ? '-' : ''
@@ -28,7 +19,8 @@ function parseCurrencyInput(value: string): number | null {
 }
 
 interface EditableTransaction extends ParsedTransaction {
-  _id: number // internal key for react
+  _id: number
+  _amountDisplay: string // controlled display value for the amount input
 }
 
 export default function ImportPage() {
@@ -38,61 +30,49 @@ export default function ImportPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [errorsExpanded, setErrorsExpanded] = useState(false)
 
-  // Reference month (user-selected, defaults to current month)
   const [referenceMonth, setReferenceMonth] = useState<string>(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   })
 
-  // Editing state
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState<{
-    date: string
-    description: string
-    amount: string
-    portador: string
-    installment: string
-  }>({ date: '', description: '', amount: '', portador: '', installment: '' })
-
-  // Import flow state
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [duplicateModal, setDuplicateModal] = useState<{ referenceMonth: string } | null>(null)
 
   const importCsv = useImportCsv()
-  const { data: dependents } = useDependents()
 
-  const buildPayload = (force: boolean): ImportCsvPayload => {
-    return {
-      transactions: editableTransactions.map((tx) => ({
-        date: tx.date,
-        description: tx.description,
-        amount: tx.amount,
-        categoryId: null,
-        dependentId: null,
-        source: 'csv' as const,
-        importId: null,
-        portador: tx.portador ?? null,
-        installmentCurrent: tx.installmentCurrent ?? null,
-        installmentTotal: tx.installmentTotal ?? null,
-      })),
-      referenceMonth,
-      force,
-    }
-  }
+  const buildPayload = (force: boolean): ImportCsvPayload => ({
+    transactions: editableTransactions.map((tx) => ({
+      date: tx.date,
+      description: tx.description,
+      amount: tx.amount,
+      categoryId: null,
+      dependentId: null,
+      source: 'csv' as const,
+      importId: null,
+      portador: tx.portador ?? null,
+      installmentCurrent: tx.installmentCurrent ?? null,
+      installmentTotal: tx.installmentTotal ?? null,
+    })),
+    referenceMonth,
+    force,
+  })
 
   const handleFileAccepted = async (file: File) => {
     setFileError(null)
     setParseResult(null)
     setEditableTransactions([])
     setSuccessMessage(null)
-    setEditingId(null)
     setIsLoading(true)
     try {
       const result = await parseCsv(file)
       setParseResult(result)
       setEditableTransactions(
-        result.valid.map((tx, idx) => ({ ...tx, _id: idx }))
+        result.valid.map((tx, idx) => ({
+          ...tx,
+          _id: idx,
+          _amountDisplay: formatCurrencyInput(tx.amount),
+        }))
       )
     } catch {
       setFileError('Não foi possível processar o arquivo. Verifique se o arquivo está correto e tente novamente.')
@@ -108,78 +88,61 @@ export default function ImportPage() {
     setSuccessMessage(null)
   }
 
-  // --- Editing handlers ---
-
-  const handleStartEdit = useCallback((tx: EditableTransaction) => {
-    setEditingId(tx._id)
-    setEditForm({
-      date: tx.date,
-      description: tx.description,
-      amount: formatCurrencyInput(tx.amount),
-      portador: tx.portador ?? '',
-      installment: tx.installment ?? '',
-    })
-  }, [])
-
-  const handleCancelEdit = useCallback(() => {
-    setEditingId(null)
-  }, [])
-
-  const handleSaveEdit = useCallback(() => {
-    if (editingId === null) return
-
-    const amount = parseCurrencyInput(editForm.amount)
-    if (!amount) return
-    if (!editForm.date || !editForm.description.trim()) return
-
-    // Parse installment
-    let installmentCurrent: number | undefined
-    let installmentTotal: number | undefined
-    let installmentStr: string | undefined
-    if (editForm.installment.trim()) {
-      const match = editForm.installment.trim().match(/^(\d+)\/(\d+)$/)
-      if (match) {
-        installmentCurrent = parseInt(match[1], 10)
-        installmentTotal = parseInt(match[2], 10)
-        installmentStr = editForm.installment.trim()
-      }
-    }
-
+  // Generic field updater
+  const updateField = useCallback(<K extends keyof EditableTransaction>(
+    id: number,
+    field: K,
+    value: EditableTransaction[K]
+  ) => {
     setEditableTransactions((prev) =>
-      prev.map((tx) =>
-        tx._id === editingId
-          ? {
-              ...tx,
-              date: editForm.date,
-              description: editForm.description.trim(),
-              amount,
-              portador: editForm.portador.trim() || undefined,
-              installment: installmentStr,
-              installmentCurrent,
-              installmentTotal,
-            }
-          : tx
-      )
+      prev.map((tx) => (tx._id === id ? { ...tx, [field]: value } : tx))
     )
-    setEditingId(null)
-  }, [editingId, editForm])
+  }, [])
+
+  // Commit amount from display string back to cents on blur
+  const commitAmount = useCallback((id: number) => {
+    setEditableTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx._id !== id) return tx
+        const cents = parseCurrencyInput(tx._amountDisplay)
+        if (cents === null) return { ...tx, _amountDisplay: formatCurrencyInput(tx.amount) } // revert
+        return { ...tx, amount: cents, _amountDisplay: formatCurrencyInput(cents) }
+      })
+    )
+  }, [])
+
+  // Commit installment string (e.g. "2/12") back to fields on blur
+  const commitInstallment = useCallback((id: number, value: string) => {
+    setEditableTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx._id !== id) return tx
+        const match = value.trim().match(/^(\d+)\/(\d+)$/)
+        if (match) {
+          return {
+            ...tx,
+            installment: value.trim(),
+            installmentCurrent: parseInt(match[1], 10),
+            installmentTotal: parseInt(match[2], 10),
+          }
+        }
+        // Invalid format — keep as-is but clear parsed fields
+        return { ...tx, installment: value.trim() || undefined, installmentCurrent: undefined, installmentTotal: undefined }
+      })
+    )
+  }, [])
 
   const handleDeleteRow = useCallback((id: number) => {
     setEditableTransactions((prev) => prev.filter((tx) => tx._id !== id))
   }, [])
 
-  // --- Import handlers ---
-
   const handleImport = async () => {
     if (editableTransactions.length === 0) return
-
     setIsSubmitting(true)
     setSuccessMessage(null)
-
     try {
       const payload = buildPayload(false)
       const result = await importCsv.mutateAsync(payload)
-      setSuccessMessage(`Importação concluída com sucesso! ${result.transactionCount} transação(ões) importada(s).`)
+      setSuccessMessage(`Importação concluída! ${result.transactionCount} transação(ões) importada(s).`)
       setParseResult(null)
       setEditableTransactions([])
     } catch (error) {
@@ -199,11 +162,10 @@ export default function ImportPage() {
   const handleConfirmDuplicate = async () => {
     setDuplicateModal(null)
     setIsSubmitting(true)
-
     try {
       const payload = buildPayload(true)
       const result = await importCsv.mutateAsync(payload)
-      setSuccessMessage(`Importação concluída com sucesso! ${result.transactionCount} transação(ões) importada(s).`)
+      setSuccessMessage(`Importação concluída! ${result.transactionCount} transação(ões) importada(s).`)
       setParseResult(null)
       setEditableTransactions([])
     } catch {
@@ -213,15 +175,12 @@ export default function ImportPage() {
     }
   }
 
-  const handleCancelDuplicate = () => {
-    setDuplicateModal(null)
-  }
-
   const hasValidTransactions = editableTransactions.length > 0
-  const allInvalid =
-    parseResult !== null &&
-    parseResult.valid.length === 0 &&
-    parseResult.invalidCount > 0
+  const allInvalid = parseResult !== null && parseResult.valid.length === 0 && parseResult.invalidCount > 0
+
+  const inputBase =
+    'w-full rounded border border-transparent bg-transparent px-2 py-1 text-sm transition ' +
+    'hover:border-gray-300 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-400'
 
   return (
     <div className="space-y-6">
@@ -243,32 +202,21 @@ export default function ImportPage() {
       </div>
 
       {fileError && (
-        <div
-          className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-          role="alert"
-        >
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
           {fileError}
         </div>
       )}
 
-      {isLoading && (
-        <p className="text-sm text-gray-500">Processando arquivo...</p>
-      )}
+      {isLoading && <p className="text-sm text-gray-500">Processando arquivo...</p>}
 
       {successMessage && (
-        <div
-          className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-700"
-          role="alert"
-        >
+        <div className="rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-700" role="alert">
           {successMessage}
         </div>
       )}
 
       {allInvalid && (
-        <div
-          className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800"
-          role="alert"
-        >
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800" role="alert">
           Nenhuma transação válida encontrada no arquivo.
         </div>
       )}
@@ -284,7 +232,6 @@ export default function ImportPage() {
             <span>{parseResult.invalidCount} linha(s) ignorada(s)</span>
             <span className="text-xs">{errorsExpanded ? '▲' : '▼'}</span>
           </button>
-
           {errorsExpanded && (
             <ul className="mt-3 space-y-1 text-xs text-yellow-700">
               {parseResult.invalidReasons.map((item, idx) => (
@@ -299,129 +246,107 @@ export default function ImportPage() {
 
       {hasValidTransactions && (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {editableTransactions.length} transação(ões) para importar.
-              <span className="ml-2 text-xs text-gray-400">Clique no ícone de editar para alterar antes de importar.</span>
-            </p>
-          </div>
+          <p className="text-sm text-gray-500">
+            {editableTransactions.length} transação(ões) para importar. Edite diretamente na tabela antes de importar.
+          </p>
 
-          <div className="overflow-x-auto rounded-md border border-gray-200">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-gray-700">Data</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-700">Descrição</th>
-                  <th className="px-4 py-3 text-left font-medium text-gray-700">Portador</th>
-                  <th className="px-4 py-3 text-right font-medium text-gray-700">Valor (R$)</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-700">Parcela</th>
-                  <th className="px-4 py-3 text-center font-medium text-gray-700">Ações</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Data</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Descrição</th>
+                  <th className="px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">Portador</th>
+                  <th className="px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-gray-400">Valor (R$)</th>
+                  <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-400">Parcela</th>
+                  <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {editableTransactions.map((tx) => (
-                  <tr key={tx._id} className="hover:bg-gray-50">
-                    {editingId === tx._id ? (
-                      <>
-                        <td className="px-2 py-2">
-                          <input
-                            type="date"
-                            value={editForm.date}
-                            onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            value={editForm.description}
-                            onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            value={editForm.portador}
-                            onChange={(e) => setEditForm((f) => ({ ...f, portador: e.target.value }))}
-                            placeholder="Nome do portador"
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            value={editForm.amount}
-                            onChange={(e) => setEditForm((f) => ({ ...f, amount: e.target.value }))}
-                            placeholder="0,00"
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-sm text-right focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2">
-                          <input
-                            type="text"
-                            value={editForm.installment}
-                            onChange={(e) => setEditForm((f) => ({ ...f, installment: e.target.value }))}
-                            placeholder="1/12"
-                            className="w-20 rounded border border-gray-300 px-2 py-1 text-sm text-center focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-2 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={handleSaveEdit}
-                              className="rounded p-1 text-green-600 hover:bg-green-50"
-                              title="Salvar"
-                            >
-                              <Check className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleCancelEdit}
-                              className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                              title="Cancelar"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    ) : (
-                      <>
-                        <td className="px-4 py-2 text-gray-700">{tx.date}</td>
-                        <td className="px-4 py-2 text-gray-700">{tx.description}</td>
-                        <td className="px-4 py-2 text-gray-700">{tx.portador ?? '—'}</td>
-                        <td className="px-4 py-2 text-right text-gray-700">
-                          {formatCurrency(tx.amount)}
-                        </td>
-                        <td className="px-4 py-2 text-center text-gray-700">
-                          {tx.installment ?? '—'}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleStartEdit(tx)}
-                              className="rounded p-1 text-blue-600 hover:bg-blue-50"
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteRow(tx._id)}
-                              className="rounded p-1 text-red-600 hover:bg-red-50"
-                              title="Remover"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </>
-                    )}
-                  </tr>
-                ))}
+                {editableTransactions.map((tx, i) => {
+                  const isReembolso = tx.amount < 0
+                  return (
+                    <tr key={tx._id} className={i % 2 === 1 ? 'bg-gray-50/40' : ''}>
+                      {/* Data */}
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="date"
+                          value={tx.date}
+                          onChange={(e) => updateField(tx._id, 'date', e.target.value)}
+                          className={inputBase}
+                        />
+                      </td>
+
+                      {/* Descrição */}
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="text"
+                          value={tx.description}
+                          onChange={(e) => updateField(tx._id, 'description', e.target.value)}
+                          className={inputBase}
+                        />
+                      </td>
+
+                      {/* Portador */}
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="text"
+                          value={tx.portador ?? ''}
+                          onChange={(e) => updateField(tx._id, 'portador', e.target.value || undefined)}
+                          placeholder="—"
+                          className={inputBase}
+                        />
+                      </td>
+
+                      {/* Valor */}
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={tx._amountDisplay}
+                          onChange={(e) => updateField(tx._id, '_amountDisplay', e.target.value)}
+                          onBlur={() => commitAmount(tx._id)}
+                          placeholder="0,00"
+                          className={
+                            inputBase +
+                            ' text-right font-medium ' +
+                            (isReembolso ? 'text-emerald-600' : 'text-gray-800')
+                          }
+                        />
+                        {isReembolso && (
+                          <span className="block text-right text-[9px] font-bold uppercase tracking-wider text-emerald-500 mt-0.5 pr-2">
+                            Reembolso
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Parcela */}
+                      <td className="px-2 py-1.5">
+                        <input
+                          type="text"
+                          value={tx.installment ?? ''}
+                          onChange={(e) => updateField(tx._id, 'installment', e.target.value || undefined)}
+                          onBlur={(e) => commitInstallment(tx._id, e.target.value)}
+                          placeholder="1/12"
+                          className={inputBase + ' text-center w-20'}
+                        />
+                      </td>
+
+                      {/* Remover */}
+                      <td className="px-2 py-1.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRow(tx._id)}
+                          className="rounded p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition"
+                          title="Remover linha"
+                          aria-label={`Remover ${tx.description}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -429,19 +354,16 @@ export default function ImportPage() {
           <div className="flex justify-end gap-3">
             <button
               type="button"
-              onClick={() => {
-                setParseResult(null)
-                setEditableTransactions([])
-              }}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              onClick={() => { setParseResult(null); setEditableTransactions([]) }}
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={handleImport}
-              disabled={isSubmitting || editingId !== null}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={isSubmitting}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? 'Importando...' : `Importar ${editableTransactions.length} transação(ões)`}
             </button>
@@ -449,7 +371,7 @@ export default function ImportPage() {
         </>
       )}
 
-      {/* Modal de confirmação de duplicidade */}
+      {/* Modal duplicidade */}
       {duplicateModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
@@ -458,10 +380,7 @@ export default function ImportPage() {
           aria-labelledby="duplicate-modal-title"
         >
           <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <h2
-              id="duplicate-modal-title"
-              className="text-lg font-semibold text-gray-900"
-            >
+            <h2 id="duplicate-modal-title" className="text-lg font-semibold text-gray-900">
               Importação duplicada
             </h2>
             <p className="mt-2 text-sm text-gray-600">
@@ -472,15 +391,15 @@ export default function ImportPage() {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={handleCancelDuplicate}
-                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                onClick={() => setDuplicateModal(null)}
+                className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDuplicate}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
               >
                 Substituir
               </button>
