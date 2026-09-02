@@ -17,14 +17,24 @@ function makeError(statusCode: number, code: string, message: string): ServiceEr
 // Default category names seeded for every new user
 // ---------------------------------------------------------------------------
 const DEFAULT_CATEGORIES: Array<{ name: string; color: string }> = [
-  { name: 'Alimentação',  color: '#f97316' },
-  { name: 'Transporte',   color: '#3b82f6' },
-  { name: 'Saúde',        color: '#22c55e' },
-  { name: 'Educação',     color: '#8b5cf6' },
-  { name: 'Lazer',        color: '#ec4899' },
-  { name: 'Moradia',      color: '#14b8a6' },
-  { name: 'Vestuário',    color: '#eab308' },
-  { name: 'Outros',       color: '#6b7280' },
+  { name: 'Alimentação',           color: '#f97316' },
+  { name: 'Assinaturas e serviços', color: '#6366f1' },
+  { name: 'Bares e restaurantes',  color: '#f43f5e' },
+  { name: 'Casa',                  color: '#14b8a6' },
+  { name: 'Compras',               color: '#a855f7' },
+  { name: 'Cuidados pessoais',     color: '#ec4899' },
+  { name: 'Dívidas e empréstimos', color: '#ef4444' },
+  { name: 'Educação',              color: '#8b5cf6' },
+  { name: 'Lazer e hobbies',       color: '#0ea5e9' },
+  { name: 'Mercado',               color: '#22c55e' },
+  { name: 'Outros',                color: '#6b7280' },
+  { name: 'Pets',                  color: '#84cc16' },
+  { name: 'Presentes',             color: '#f59e0b' },
+  { name: 'Roupas',                color: '#e879f9' },
+  { name: 'Saúde',                 color: '#10b981' },
+  { name: 'Trabalho',              color: '#3b82f6' },
+  { name: 'Transporte',            color: '#64748b' },
+  { name: 'Viagem',                color: '#eab308' },
 ]
 
 /**
