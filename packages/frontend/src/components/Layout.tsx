@@ -75,7 +75,7 @@ export default function Layout() {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-2 md:hidden safe-bottom">
-        {navItems.slice(0, 5).map(({ to, label, icon: Icon }) => (
+        {navItems.slice(0, 4).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === '/'}
             className={({ isActive }) => cn(
               'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
@@ -85,6 +85,13 @@ export default function Layout() {
             <span>{label}</span>
           </NavLink>
         ))}
+        <button
+          onClick={handleLogout}
+          className="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-red-500"
+        >
+          <LogOut className="h-5 w-5" />
+          <span>Sair</span>
+        </button>
       </nav>
     </div>
   )
