@@ -37,13 +37,46 @@ const DEFAULT_CATEGORIES: Array<{ name: string; color: string }> = [
   { name: 'Viagem',                color: '#eab308' },
 ]
 
+// Set of canonical default names for sync comparison (lowercase)
+const DEFAULT_NAMES_SET = new Set(DEFAULT_CATEGORIES.map((c) => c.name.toLowerCase()))
+
 /**
- * Seeds default categories for a user if they have none yet.
+ * Inserts the full default category list for a user.
  */
 async function seedCategoriesForUser(userId: string): Promise<void> {
   await db.insert(categories).values(
     DEFAULT_CATEGORIES.map(({ name, color }) => ({ name, color, isDefault: true, userId }))
   )
+}
+
+/**
+ * Syncs default categories for existing users:
+ * - Deletes default categories that are no longer in the canonical list AND have no transactions
+ * - Inserts any canonical defaults that are missing
+ */
+async function syncDefaultCategories(userId: string, existing: Category[]): Promise<void> {
+  const existingDefaults = existing.filter((c) => c.isDefault)
+
+  // 1. Remove obsolete defaults (not in current list) that have no transactions
+  const obsolete = existingDefaults.filter((c) => !DEFAULT_NAMES_SET.has(c.name.toLowerCase()))
+  for (const cat of obsolete) {
+    const [{ total }] = await db
+      .select({ total: count() })
+      .from(transactions)
+      .where(eq(transactions.categoryId, cat.id))
+    if (total === 0) {
+      await db.delete(categories).where(eq(categories.id, cat.id))
+    }
+  }
+
+  // 2. Insert missing defaults
+  const existingNames = new Set(existing.map((c) => c.name.toLowerCase()))
+  const missing = DEFAULT_CATEGORIES.filter((c) => !existingNames.has(c.name.toLowerCase()))
+  if (missing.length > 0) {
+    await db.insert(categories).values(
+      missing.map(({ name, color }) => ({ name, color, isDefault: true, userId }))
+    )
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +85,8 @@ async function seedCategoriesForUser(userId: string): Promise<void> {
 
 /**
  * Lists all categories for a user.
- * On first call (no categories yet), seeds the defaults automatically.
+ * - First access: seeds the full default list.
+ * - Subsequent accesses: syncs defaults (removes obsolete, adds missing).
  */
 export async function listCategories(userId: string): Promise<Category[]> {
   const existing = await db
@@ -63,14 +97,15 @@ export async function listCategories(userId: string): Promise<Category[]> {
 
   if (existing.length === 0) {
     await seedCategoriesForUser(userId)
-    return db
-      .select()
-      .from(categories)
-      .where(eq(categories.userId, userId))
-      .orderBy(asc(categories.name))
+  } else {
+    await syncDefaultCategories(userId, existing)
   }
 
-  return existing
+  return db
+    .select()
+    .from(categories)
+    .where(eq(categories.userId, userId))
+    .orderBy(asc(categories.name))
 }
 
 export async function createCategory(name: string, userId: string, color?: string | null): Promise<Category> {
