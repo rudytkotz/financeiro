@@ -53,11 +53,15 @@ export async function resolvePortadorToDependents(
   const uniqueNames = [...new Set(portadorNames.map((n) => n.trim()).filter(Boolean))]
 
   for (const name of uniqueNames) {
-    // Check if dependent already exists (case-insensitive)
+    // Check if dependent already exists for this user (case-insensitive)
     const [existing] = await db
       .select({ id: dependents.id, name: dependents.name })
       .from(dependents)
-      .where(sql`lower(${dependents.name}) = lower(${name})`)
+      .where(
+        userId
+          ? sql`lower(${dependents.name}) = lower(${name}) AND ${dependents.userId} = ${userId}`
+          : sql`lower(${dependents.name}) = lower(${name}) AND ${dependents.userId} IS NULL`
+      )
       .limit(1)
 
     if (existing) {
