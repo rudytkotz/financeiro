@@ -64,6 +64,13 @@
       "when": 1724800000000,
       "tag": "0008_categories_user_scoped",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1724900000000,
+      "tag": "0009_add_category_color",
+      "breakpoints": true
     }
   ]
 }

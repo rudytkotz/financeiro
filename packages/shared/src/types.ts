@@ -21,6 +21,7 @@ export interface Category {
   id: string
   name: string           // max 50 chars
   isDefault: boolean
+  color: string | null   // hex color, e.g. '#ef4444'
 }
 
 export interface Dependent {
@@ -97,6 +98,7 @@ export interface SetDependentPayload {
 
 export interface CreateCategoryPayload {
   name: string
+  color?: string | null  // hex color, e.g. '#ef4444'
 }
 
 export interface CreateDependentPayload {

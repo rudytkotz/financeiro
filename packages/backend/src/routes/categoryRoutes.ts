@@ -16,9 +16,9 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.post('/api/categories', async (request, reply) => {
-    const { name } = request.body as { name: string }
+    const { name, color } = request.body as { name: string; color?: string | null }
     try {
-      const category = await createCategory(name, getUserId(request))
+      const category = await createCategory(name, getUserId(request), color)
       return reply.status(201).send(category)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
@@ -28,9 +28,9 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
 
   app.put('/api/categories/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    const { name } = request.body as { name: string }
+    const { name, color } = request.body as { name: string; color?: string | null }
     try {
-      const category = await renameCategory(id, name, getUserId(request))
+      const category = await renameCategory(id, name, getUserId(request), color)
       return reply.status(200).send(category)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })

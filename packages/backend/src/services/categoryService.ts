@@ -16,15 +16,15 @@ function makeError(statusCode: number, code: string, message: string): ServiceEr
 // ---------------------------------------------------------------------------
 // Default category names seeded for every new user
 // ---------------------------------------------------------------------------
-const DEFAULT_CATEGORY_NAMES = [
-  'Alimentação',
-  'Transporte',
-  'Saúde',
-  'Educação',
-  'Lazer',
-  'Moradia',
-  'Vestuário',
-  'Outros',
+const DEFAULT_CATEGORIES: Array<{ name: string; color: string }> = [
+  { name: 'Alimentação',  color: '#f97316' },
+  { name: 'Transporte',   color: '#3b82f6' },
+  { name: 'Saúde',        color: '#22c55e' },
+  { name: 'Educação',     color: '#8b5cf6' },
+  { name: 'Lazer',        color: '#ec4899' },
+  { name: 'Moradia',      color: '#14b8a6' },
+  { name: 'Vestuário',    color: '#eab308' },
+  { name: 'Outros',       color: '#6b7280' },
 ]
 
 /**
@@ -32,7 +32,7 @@ const DEFAULT_CATEGORY_NAMES = [
  */
 async function seedCategoriesForUser(userId: string): Promise<void> {
   await db.insert(categories).values(
-    DEFAULT_CATEGORY_NAMES.map((name) => ({ name, isDefault: true, userId }))
+    DEFAULT_CATEGORIES.map(({ name, color }) => ({ name, color, isDefault: true, userId }))
   )
 }
 
@@ -63,10 +63,11 @@ export async function listCategories(userId: string): Promise<Category[]> {
   return existing
 }
 
-export async function createCategory(name: string, userId: string): Promise<Category> {
+export async function createCategory(name: string, userId: string, color?: string | null): Promise<Category> {
   const trimmed = name?.trim() ?? ''
   if (!trimmed) throw makeError(422, 'VALIDATION_ERROR', 'O nome da categoria é obrigatório.')
   if (trimmed.length > 50) throw makeError(422, 'VALIDATION_ERROR', 'O nome da categoria deve ter no máximo 50 caracteres.')
+  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) throw makeError(422, 'VALIDATION_ERROR', 'Cor inválida. Use formato hex (#rrggbb).')
 
   const [duplicate] = await db
     .select({ id: categories.id })
@@ -81,16 +82,19 @@ export async function createCategory(name: string, userId: string): Promise<Cate
 
   const [created] = await db
     .insert(categories)
-    .values({ name: trimmed, isDefault: false, userId })
+    .values({ name: trimmed, color: color ?? null, isDefault: false, userId })
     .returning()
 
   return created
 }
 
-export async function renameCategory(id: string, name: string, userId: string): Promise<Category> {
+export async function renameCategory(id: string, name: string, userId: string, color?: string | null): Promise<Category> {
   const trimmed = name?.trim() ?? ''
   if (!trimmed) throw makeError(422, 'VALIDATION_ERROR', 'O nome da categoria é obrigatório.')
   if (trimmed.length > 50) throw makeError(422, 'VALIDATION_ERROR', 'O nome da categoria deve ter no máximo 50 caracteres.')
+  if (color !== undefined && color !== null && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Cor inválida. Use formato hex (#rrggbb).')
+  }
 
   // Must belong to user
   const [category] = await db
@@ -114,9 +118,12 @@ export async function renameCategory(id: string, name: string, userId: string): 
 
   if (duplicate) throw makeError(409, 'DUPLICATE_NAME', `Já existe uma categoria com o nome "${trimmed}".`)
 
+  const updateValues: Record<string, unknown> = { name: trimmed }
+  if (color !== undefined) updateValues.color = color
+
   const [updated] = await db
     .update(categories)
-    .set({ name: trimmed })
+    .set(updateValues)
     .where(and(eq(categories.id, id), eq(categories.userId, userId)))
     .returning()
 

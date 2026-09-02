@@ -33,6 +33,7 @@ export const categories = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     name: varchar('name', { length: 50 }).notNull(),
     isDefault: boolean('is_default').notNull().default(false),
+    color: varchar('color', { length: 7 }), // hex color, e.g. '#ef4444', nullable
     userId: uuid('user_id').references(() => users.id),
   },
   (table) => ({
