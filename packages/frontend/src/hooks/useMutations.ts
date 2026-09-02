@@ -36,8 +36,21 @@ export function useUpdateTransaction() {
       const { data } = await api.put(`/api/transactions/${id}`, payload)
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    onSuccess: (updated) => {
+      // Update the transaction in place in every cached transactions query
+      // so the list order stays stable and no refetch is needed.
+      queryClient.setQueriesData<{ transactions: Transaction[]; total: number }>(
+        { queryKey: ['transactions'] },
+        (old) => {
+          if (!old) return old
+          const transactions = old.transactions.map((t) =>
+            t.id === updated.id ? { ...t, ...updated } : t
+          )
+          const total = transactions.reduce((s, t) => s + t.amount, 0)
+          return { transactions, total }
+        }
+      )
+      // Dashboard can be a background refresh — no need to block UX
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
@@ -77,8 +90,17 @@ export function useSetTransactionDependent() {
       const { data } = await api.put(`/api/transactions/${id}/dependent`, payload)
       return data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    onSuccess: (updated) => {
+      queryClient.setQueriesData<{ transactions: Transaction[]; total: number }>(
+        { queryKey: ['transactions'] },
+        (old) => {
+          if (!old) return old
+          const transactions = old.transactions.map((t) =>
+            t.id === updated.id ? { ...t, ...updated } : t
+          )
+          return { ...old, transactions }
+        }
+      )
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
