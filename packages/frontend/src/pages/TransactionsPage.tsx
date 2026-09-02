@@ -61,7 +61,7 @@ function offsetMonth(ym: string, offset: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-type SortField = 'date' | 'description' | 'amount'
+type SortField = 'date' | 'description' | 'amount' | 'installment' | 'category' | 'dependent' | 'paymentMethod'
 type SortDir = 'asc' | 'desc'
 
 // ===========================================================================
@@ -116,7 +116,27 @@ export default function TransactionsPage() {
       let cmp = 0
       if (sortField === 'date') cmp = a.date.localeCompare(b.date)
       else if (sortField === 'description') cmp = a.description.localeCompare(b.description, 'pt-BR', { sensitivity: 'base' })
-      else cmp = a.amount - b.amount
+      else if (sortField === 'amount') cmp = a.amount - b.amount
+      else if (sortField === 'installment') {
+        const ai = a.installmentTotal ?? 0
+        const bi = b.installmentTotal ?? 0
+        cmp = ai - bi
+      }
+      else if (sortField === 'category') {
+        const ac = categoryMap.get(a.categoryId ?? '') ?? ''
+        const bc = categoryMap.get(b.categoryId ?? '') ?? ''
+        cmp = ac.localeCompare(bc, 'pt-BR', { sensitivity: 'base' })
+      }
+      else if (sortField === 'dependent') {
+        const ad = (dependents ?? []).find(d => d.id === a.dependentId)?.name ?? ''
+        const bd = (dependents ?? []).find(d => d.id === b.dependentId)?.name ?? ''
+        cmp = ad.localeCompare(bd, 'pt-BR', { sensitivity: 'base' })
+      }
+      else if (sortField === 'paymentMethod') {
+        const ap = (a as any).paymentMethod ?? ''
+        const bp = (b as any).paymentMethod ?? ''
+        cmp = ap.localeCompare(bp)
+      }
       return sortDir === 'asc' ? cmp : -cmp
     })
   }, [rawTransactions, dependentId, paymentMethodFilter, searchText, sortField, sortDir])
@@ -139,7 +159,7 @@ export default function TransactionsPage() {
   const handleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
       if (prev === field) { setSortDir((d) => d === 'asc' ? 'desc' : 'asc'); return field }
-      setSortDir(field === 'amount' ? 'desc' : 'asc'); return field
+      setSortDir(field === 'amount' || field === 'installment' ? 'desc' : 'asc'); return field
     })
   }, [])
   const clearFilters = () => { setCategoryId(''); setDependentId(''); setPaymentMethodFilter(''); setSearchText('') }
@@ -309,10 +329,10 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3 text-left"><SortBtn field="date">Data</SortBtn></th>
                   <th className="px-4 py-3 text-left"><SortBtn field="description">Descrição</SortBtn></th>
                   <th className="px-4 py-3 text-right"><SortBtn field="amount">Valor</SortBtn></th>
-                  <th className="px-4 py-3 text-center text-[10px] font-semibold text-gray-400 uppercase">Parc.</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase">Categoria</th>
-                  <th className="px-4 py-3 text-left text-[10px] font-semibold text-gray-400 uppercase">Dependente</th>
-                  <th className="px-4 py-3 text-center text-[10px] font-semibold text-gray-400 uppercase">Tipo</th>
+                  <th className="px-4 py-3 text-center"><SortBtn field="installment">Parc.</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="category">Categoria</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><SortBtn field="dependent">Dependente</SortBtn></th>
+                  <th className="px-4 py-3 text-center"><SortBtn field="paymentMethod">Tipo</SortBtn></th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
