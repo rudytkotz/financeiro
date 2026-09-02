@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { listCategories, createCategory, deleteCategory, type ServiceError } from '../services/categoryService.js'
+import { listCategories, createCategory, renameCategory, deleteCategory, type ServiceError } from '../services/categoryService.js'
 
 function isServiceError(err: unknown): err is ServiceError {
   return typeof err === 'object' && err !== null && 'statusCode' in err && 'code' in err && 'message' in err
@@ -11,8 +11,8 @@ function getUserId(request: any): string {
 
 const categoryRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/categories', async (request, reply) => {
-    const categories = await listCategories(getUserId(request))
-    return reply.send(categories)
+    const cats = await listCategories(getUserId(request))
+    return reply.send(cats)
   })
 
   app.post('/api/categories', async (request, reply) => {
@@ -20,6 +20,18 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
     try {
       const category = await createCategory(name, getUserId(request))
       return reply.status(201).send(category)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  app.put('/api/categories/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const { name } = request.body as { name: string }
+    try {
+      const category = await renameCategory(id, name, getUserId(request))
+      return reply.status(200).send(category)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
       throw err

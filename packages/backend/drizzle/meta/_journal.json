@@ -57,6 +57,13 @@
       "when": 1724700000000,
       "tag": "0007_dependents_user_scoped_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1724800000000,
+      "tag": "0008_categories_user_scoped",
+      "breakpoints": true
     }
   ]
 }
