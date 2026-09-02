@@ -74,11 +74,11 @@ export default function Layout() {
       </main>
 
       {/* Mobile bottom navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-2 md:hidden safe-bottom">
-        {navItems.slice(0, 4).map(({ to, label, icon: Icon }) => (
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-1.5 md:hidden safe-bottom">
+        {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === '/'}
             className={({ isActive }) => cn(
-              'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium transition-colors',
+              'flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium transition-colors',
               isActive ? 'text-primary' : 'text-muted-foreground'
             )}>
             <Icon className="h-5 w-5" />
@@ -87,7 +87,7 @@ export default function Layout() {
         ))}
         <button
           onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-2 py-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-red-500"
+          className="flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium text-muted-foreground transition-colors hover:text-red-500"
         >
           <LogOut className="h-5 w-5" />
           <span>Sair</span>
