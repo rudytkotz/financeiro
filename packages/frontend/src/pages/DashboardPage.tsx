@@ -110,10 +110,10 @@ export default function DashboardPage() {
           {/* Summary Cards */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Total gastos */}
-            <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-l-4 border-l-red-400 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-red-100 p-2">
-                  <TrendingDown className="h-5 w-5 text-red-600" />
+                <div className="rounded-lg bg-red-50 p-2">
+                  <TrendingDown className="h-5 w-5 text-red-500" />
                 </div>
                 <span className="text-sm font-medium text-gray-500">Total gastos</span>
               </div>
@@ -127,14 +127,14 @@ export default function DashboardPage() {
             <IncomeCard incomeAmount={dashboard.incomeAmount} month={month} />
 
             {/* Saldo */}
-            <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <div className={`rounded-xl border border-l-4 bg-white p-5 shadow-sm ${dashboard.balance >= 0 ? 'border-l-emerald-400' : 'border-l-red-400'}`}>
               <div className="flex items-center gap-2">
-                <div className={`rounded-lg p-2 ${dashboard.balance >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  <DollarSign className={`h-5 w-5 ${dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                <div className={`rounded-lg p-2 ${dashboard.balance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <DollarSign className={`h-5 w-5 ${dashboard.balance >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
                 </div>
                 <span className="text-sm font-medium text-gray-500">Saldo</span>
               </div>
-              <p className={`mt-3 text-2xl font-bold ${dashboard.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`mt-3 text-2xl font-bold ${dashboard.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {formatCurrency(dashboard.balance)}
               </p>
               {dashboard.incomeAmount > 0 && (
@@ -145,10 +145,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Gastos por forma de pagamento resumo */}
-            <div className="rounded-xl border bg-white p-5 shadow-sm">
+            <div className="rounded-xl border border-l-4 border-l-primary/50 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
-                <div className="rounded-lg bg-blue-100 p-2">
-                  <CreditCard className="h-5 w-5 text-blue-600" />
+                <div className="rounded-lg bg-primary/10 p-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
                 </div>
                 <span className="text-sm font-medium text-gray-500">Por tipo</span>
               </div>
@@ -301,7 +301,7 @@ function IncomeCard({ incomeAmount, month }: { incomeAmount: number; month: stri
   }
 
   return (
-    <div className="rounded-xl border bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-l-4 border-l-emerald-400 bg-white p-5 shadow-sm">
       <div className="flex items-center gap-2">
         <div className="rounded-lg bg-green-100 p-2">
           <TrendingUp className="h-5 w-5 text-green-600" />

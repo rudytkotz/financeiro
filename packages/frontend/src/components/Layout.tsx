@@ -36,30 +36,39 @@ export default function Layout() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:z-10 md:w-56 md:flex-col md:border-r md:bg-card">
-        <div className="flex h-14 items-center border-b px-4">
-          <h2 className="text-lg font-semibold">Financeiro</h2>
+      <aside className="hidden md:flex md:fixed md:inset-y-0 md:left-0 md:z-10 md:w-56 md:flex-col md:border-r md:bg-card" style={{ background: 'linear-gradient(180deg, hsl(243,75%,18%) 0%, hsl(243,60%,14%) 100%)' }}>
+        <div className="flex h-14 items-center border-b border-white/10 px-4 gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shadow">
+            <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14H7v-2h6v2zm4-4H7v-2h10v2zm0-4H7V6h10v2z"/></svg>
+          </div>
+          <h2 className="text-sm font-bold text-white tracking-wide">Financeiro</h2>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 p-2">
+        <nav className="flex flex-1 flex-col gap-0.5 p-2.5 pt-3">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} end={to === '/'}
               className={({ isActive }) => cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                isActive
+                  ? 'bg-white/15 text-white shadow-sm'
+                  : 'text-white/55 hover:bg-white/8 hover:text-white/90'
               )}>
-              <Icon className="h-4 w-4" />
-              {label}
+              {({ isActive }) => (
+                <>
+                  <Icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-white' : 'text-white/50')} />
+                  {label}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
         {/* User + dark mode + logout */}
-        <div className="border-t p-3 space-y-2">
+        <div className="border-t border-white/10 p-3">
           <div className="flex items-center justify-between">
-            <button onClick={toggle} className="rounded-lg p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition" title={isDark ? 'Modo claro' : 'Modo escuro'}>
+            <button onClick={toggle} className="rounded-lg p-1.5 text-white/40 hover:text-white/80 hover:bg-white/10 transition" title={isDark ? 'Modo claro' : 'Modo escuro'}>
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 truncate mx-2">{user?.username}</span>
-            <button onClick={handleLogout} className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition" title="Sair">
+            <span className="text-xs font-medium text-white/60 truncate mx-2">{user?.username}</span>
+            <button onClick={handleLogout} className="rounded-lg p-1.5 text-white/40 hover:text-red-300 hover:bg-white/10 transition" title="Sair">
               <LogOut className="h-4 w-4" />
             </button>
           </div>

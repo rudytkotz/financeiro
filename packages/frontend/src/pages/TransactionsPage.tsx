@@ -142,6 +142,9 @@ export default function TransactionsPage() {
   }, [rawTransactions, dependentId, paymentMethodFilter, searchText, sortField, sortDir])
 
   const total = useMemo(() => transactions.reduce((s, t) => s + t.amount, 0), [transactions])
+  const totalExpenses = useMemo(() => transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions])
+  const totalRefunds  = useMemo(() => transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0), [transactions])
+  const uncategorized = useMemo(() => transactions.filter(t => !t.categoryId).length, [transactions])
 
   // Summary by payment method
   const pmSummary = useMemo(() => {
@@ -152,6 +155,36 @@ export default function TransactionsPage() {
     }
     return PAYMENT_METHODS.filter((pm) => map.has(pm.value)).map((pm) => ({ ...pm, total: map.get(pm.value)! }))
   }, [transactions])
+
+  // Summary by category
+  const catSummary = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; count: number }>()
+    for (const t of transactions) {
+      const key = t.categoryId ?? '__none__'
+      const name = t.categoryId ? (categoryMap.get(t.categoryId) ?? 'Sem categoria') : 'Sem categoria'
+      const prev = map.get(key) ?? { name, total: 0, count: 0 }
+      map.set(key, { name, total: prev.total + t.amount, count: prev.count + 1 })
+    }
+    return [...map.entries()]
+      .map(([id, v]) => ({ id: id === '__none__' ? '' : id, ...v }))
+      .sort((a, b) => b.total - a.total)
+  }, [transactions, categoryMap])
+
+  // Summary by dependent
+  const depSummary = useMemo(() => {
+    const map = new Map<string, { name: string; total: number; count: number }>()
+    for (const t of transactions) {
+      const key = t.dependentId ?? '__none__'
+      const dep = t.dependentId ? (dependents ?? []).find(d => d.id === t.dependentId) : null
+      if (!dep && t.dependentId) continue // skip unknown
+      const name = dep ? dep.name : 'Pessoal'
+      const prev = map.get(key) ?? { name, total: 0, count: 0 }
+      map.set(key, { name, total: prev.total + t.amount, count: prev.count + 1 })
+    }
+    return [...map.entries()]
+      .map(([id, v]) => ({ id: id === '__none__' ? '' : id, ...v }))
+      .sort((a, b) => b.total - a.total)
+  }, [transactions, dependents])
 
   const activeFilterCount = [categoryId, dependentId, paymentMethodFilter, searchText].filter(Boolean).length
 
@@ -239,7 +272,7 @@ export default function TransactionsPage() {
         </button>
       </div>
 
-      {/* ── SUMMARY PILLS ── */}
+      {/* ── SUMMARY PILLS (payment method) ── */}
       {pmSummary.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
           {pmSummary.map((pm) => {
@@ -255,6 +288,104 @@ export default function TransactionsPage() {
               </button>
             )
           })}
+        </div>
+      )}
+
+      {/* ── INDICATORS PANEL ── */}
+      {transactions.length > 0 && (
+        <div className="space-y-3">
+          {/* Summary row: despesas / reembolsos / líquido / sem categoria */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl border border-l-4 border-l-red-300 bg-white px-4 py-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Despesas</p>
+              <p className="mt-1 text-base font-bold text-red-600">{formatCurrency(totalExpenses)}</p>
+              <p className="text-[10px] text-gray-400">{transactions.filter(t => t.amount > 0).length} lançamentos</p>
+            </div>
+            <div className="rounded-xl border border-l-4 border-l-emerald-400 bg-white px-4 py-3 shadow-sm">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Reembolsos</p>
+              <p className="mt-1 text-base font-bold text-emerald-600">{formatCurrency(Math.abs(totalRefunds))}</p>
+              <p className="text-[10px] text-gray-400">{transactions.filter(t => t.amount < 0).length} lançamentos</p>
+            </div>
+            <div className={`rounded-xl border border-l-4 bg-white px-4 py-3 shadow-sm ${total >= 0 ? 'border-l-gray-300' : 'border-l-emerald-400'}`}>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Líquido</p>
+              <p className={`mt-1 text-base font-bold ${total < 0 ? 'text-emerald-600' : 'text-gray-800'}`}>{formatCurrency(total)}</p>
+              <p className="text-[10px] text-gray-400">{transactions.length} transações</p>
+            </div>
+            <div className={`rounded-xl border border-l-4 bg-white px-4 py-3 shadow-sm cursor-pointer transition hover:bg-gray-50 ${uncategorized > 0 ? 'border-l-amber-400' : 'border-l-gray-200'}`}
+              onClick={() => uncategorized > 0 && setCategoryId('')}>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Sem categoria</p>
+              <p className={`mt-1 text-base font-bold ${uncategorized > 0 ? 'text-amber-600' : 'text-gray-400'}`}>{uncategorized}</p>
+              <p className="text-[10px] text-gray-400">transações</p>
+            </div>
+          </div>
+
+          {/* Por categoria */}
+          {catSummary.length > 0 && (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-gray-50 px-4 py-2.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Por categoria</span>
+                {categoryId && <button onClick={() => setCategoryId('')} className="text-[10px] text-primary hover:underline font-medium">Limpar filtro</button>}
+              </div>
+              <div className="overflow-x-auto">
+                <div className="flex gap-0 min-w-max">
+                  {catSummary.map((cat, i) => {
+                    const pct = totalExpenses > 0 ? Math.min((cat.total / totalExpenses) * 100, 100) : 0
+                    const isActive = categoryId === cat.id
+                    const COLORS = ['bg-blue-400','bg-violet-400','bg-amber-400','bg-emerald-400','bg-pink-400','bg-cyan-400','bg-orange-400','bg-indigo-400','bg-teal-400','bg-rose-400']
+                    const barColor = COLORS[i % COLORS.length]
+                    return (
+                      <button key={cat.id || 'none'}
+                        onClick={() => setCategoryId(isActive ? '' : cat.id)}
+                        className={`flex-shrink-0 flex flex-col items-center px-4 py-3 border-r border-gray-50 last:border-r-0 transition min-w-[100px] ${isActive ? 'bg-primary/5' : 'hover:bg-gray-50/70'}`}>
+                        {/* Mini bar */}
+                        <div className="w-full h-1.5 rounded-full bg-gray-100 mb-2">
+                          <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className={`text-[11px] font-semibold truncate max-w-[88px] ${isActive ? 'text-primary' : 'text-gray-700'}`}>{cat.name}</span>
+                        <span className={`text-[13px] font-bold mt-0.5 ${cat.total < 0 ? 'text-emerald-600' : isActive ? 'text-primary' : 'text-gray-800'}`}>
+                          {formatShortCurrency(cat.total)}
+                        </span>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{cat.count} tx · {pct.toFixed(0)}%</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Por dependente */}
+          {depSummary.length > 1 && (
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between border-b border-gray-50 px-4 py-2.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Por dependente</span>
+                {dependentId && <button onClick={() => setDependentId('')} className="text-[10px] text-primary hover:underline font-medium">Limpar filtro</button>}
+              </div>
+              <div className="overflow-x-auto">
+                <div className="flex gap-0 min-w-max">
+                  {depSummary.map((dep) => {
+                    const pct = totalExpenses > 0 ? Math.min((dep.total / totalExpenses) * 100, 100) : 0
+                    const isActive = dependentId === dep.id
+                    return (
+                      <button key={dep.id || 'personal'}
+                        onClick={() => setDependentId(isActive ? '' : dep.id)}
+                        className={`flex-shrink-0 flex flex-col items-center px-4 py-3 border-r border-gray-50 last:border-r-0 transition min-w-[100px] ${isActive ? 'bg-violet-50' : 'hover:bg-gray-50/70'}`}>
+                        {/* Avatar */}
+                        <div className={`flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold mb-1.5 ${isActive ? 'bg-violet-500 text-white' : 'bg-violet-100 text-violet-600'}`}>
+                          {dep.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className={`text-[11px] font-semibold truncate max-w-[88px] ${isActive ? 'text-violet-700' : 'text-gray-700'}`}>{dep.name}</span>
+                        <span className={`text-[13px] font-bold mt-0.5 ${dep.total < 0 ? 'text-emerald-600' : isActive ? 'text-violet-700' : 'text-gray-800'}`}>
+                          {formatShortCurrency(dep.total)}
+                        </span>
+                        <span className="text-[9px] text-gray-400 mt-0.5">{dep.count} tx · {pct.toFixed(0)}%</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
