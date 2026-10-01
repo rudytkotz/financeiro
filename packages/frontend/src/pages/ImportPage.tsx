@@ -250,6 +250,21 @@ export default function ImportPage() {
             {editableTransactions.length} transação(ões) para importar. Edite diretamente na tabela antes de importar.
           </p>
 
+          {/* Banner informativo de parcelas */}
+          {(() => {
+            const parceladas = editableTransactions.filter(tx => tx.installmentTotal && tx.installmentTotal > 1)
+            const totalExtras = parceladas.reduce((sum, tx) => sum + ((tx.installmentTotal ?? 1) - 1), 0)
+            if (parceladas.length === 0) return null
+            return (
+              <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800" role="note">
+                <span className="font-semibold">ℹ️ Compras parceladas detectadas:</span>{' '}
+                {parceladas.length} compra(s) parcelada(s) nesta fatura. Além das{' '}
+                {editableTransactions.length} transações listadas, serão criadas automaticamente{' '}
+                mais <span className="font-semibold">{totalExtras} parcela(s)</span> nos meses correspondentes.
+              </div>
+            )
+          })()}
+
           <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">

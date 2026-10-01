@@ -3,6 +3,7 @@ import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import TransactionsPage from './pages/TransactionsPage'
 import ImportPage from './pages/ImportPage'
+import ImportsHistoryPage from './pages/ImportsHistoryPage'
 import CategoriesPage from './pages/CategoriesPage'
 import DependentsPage from './pages/DependentsPage'
 import LoginPage from './pages/LoginPage'
@@ -30,6 +31,7 @@ function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/import" element={<ImportPage />} />
+        <Route path="/imports" element={<ImportsHistoryPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/dependents" element={<DependentsPage />} />
         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />

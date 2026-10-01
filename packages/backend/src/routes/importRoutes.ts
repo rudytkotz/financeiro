@@ -228,7 +228,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
       // 'valid' contém apenas as transações do mês corrente (a parcela atual)
       // Filtrar duplicatas: remover transações com parcela que já existem no banco
-      const transactionsToSave = await filterDuplicateInstallments(valid)
+      const transactionsToSave = await filterDuplicateInstallments(valid, getUserId(request))
 
       // Se todas as transações eram duplicatas, inserir somente as de outros meses e retornar
       if (transactionsToSave.length === 0) {
@@ -275,9 +275,9 @@ const importRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  // GET /api/imports — histórico de importações
-  app.get('/api/imports', async (_request, reply) => {
-    const importsList = await listImports()
+  // GET /api/imports — histórico de importações do usuário
+  app.get('/api/imports', async (request, reply) => {
+    const importsList = await listImports(getUserId(request))
     return reply.send(importsList)
   })
 }

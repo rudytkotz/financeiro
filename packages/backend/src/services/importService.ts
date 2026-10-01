@@ -1,4 +1,4 @@
-import { eq, desc, sql } from 'drizzle-orm'
+import { eq, desc, sql, and } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { imports, transactions, dependents } from '../db/schema.js'
 import type { Import } from '../db/schema.js'
@@ -187,14 +187,46 @@ export async function overwriteImport(
   }
 
   const result = await db.transaction(async (tx) => {
-    // Encontrar importação anterior
+    // Encontrar importação anterior filtrando por userId
     const [existingImport] = await tx
       .select({ id: imports.id })
       .from(imports)
-      .where(eq(imports.referenceMonth, referenceMonth))
+      .where(
+        userId
+          ? and(eq(imports.referenceMonth, referenceMonth), eq(imports.userId, userId))
+          : eq(imports.referenceMonth, referenceMonth)
+      )
       .limit(1)
 
+    // Mapa de categorização prévia: lower(description) -> { categoryId, dependentId }
+    type CategorizationEntry = { categoryId: string | null; dependentId: string | null }
+    const categorizationMap = new Map<string, CategorizationEntry>()
+
     if (existingImport) {
+      // Buscar transações antigas que possuem categoryId ou dependentId preenchido
+      const oldTransactions = await tx
+        .select({
+          description: transactions.description,
+          categoryId: transactions.categoryId,
+          dependentId: transactions.dependentId,
+        })
+        .from(transactions)
+        .where(
+          sql`${transactions.importId} = ${existingImport.id}
+            AND (${transactions.categoryId} IS NOT NULL OR ${transactions.dependentId} IS NOT NULL)`
+        )
+
+      // Criar mapa: lower(description) -> { categoryId, dependentId }
+      for (const t of oldTransactions) {
+        const key = t.description.toLowerCase()
+        if (!categorizationMap.has(key)) {
+          categorizationMap.set(key, {
+            categoryId: t.categoryId,
+            dependentId: t.dependentId,
+          })
+        }
+      }
+
       // Deletar transações vinculadas à importação anterior
       await tx
         .delete(transactions)
@@ -204,14 +236,11 @@ export async function overwriteImport(
       await tx.delete(imports).where(eq(imports.id, existingImport.id))
     }
 
-    // Calcular o novo reference_month a partir das transações
-    const newReferenceMonth = referenceMonth
-
     // Inserir novo registro de importação
     const [importRecord] = await tx
       .insert(imports)
       .values({
-        referenceMonth: newReferenceMonth,
+        referenceMonth,
         importedAt: new Date(),
         transactionCount: transactionList.length,
         userId: userId ?? null,
@@ -219,22 +248,39 @@ export async function overwriteImport(
       .returning()
 
     // Inserir novas transações em batch
-    await tx.insert(transactions).values(
+    const insertedTransactions = await tx.insert(transactions).values(
       transactionList.map((t) => ({
         date: t.date,
         description: t.description,
         amount: t.amount,
-        categoryId: null, // categoria definida pelo usuario
+        categoryId: null as string | null, // será reaplicado abaixo se houver mapa
         dependentId: t.dependentId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
         installmentTotal: t.installmentTotal ?? null,
         source: 'csv' as const,
         importId: importRecord.id,
-        referenceMonth: newReferenceMonth,
+        referenceMonth,
         userId: userId ?? null,
       }))
-    )
+    ).returning()
+
+    // Reaplicar categorizações: atualizar transações onde a descrição bate no mapa
+    if (categorizationMap.size > 0) {
+      for (const inserted of insertedTransactions) {
+        const entry = categorizationMap.get(inserted.description.toLowerCase())
+        if (entry && (entry.categoryId || entry.dependentId)) {
+          const reapply: Record<string, unknown> = { updatedAt: new Date() }
+          if (entry.categoryId) reapply.categoryId = entry.categoryId
+          if (entry.dependentId) reapply.dependentId = entry.dependentId
+
+          await tx
+            .update(transactions)
+            .set(reapply)
+            .where(eq(transactions.id, inserted.id))
+        }
+      }
+    }
 
     return importRecord
   })
@@ -244,13 +290,14 @@ export async function overwriteImport(
 
 
 /**
- * Retorna a lista de todas as importações anteriores, ordenadas pela data de
+ * Retorna a lista de importações do usuário, ordenadas pela data de
  * importação mais recente primeiro.
  */
-export async function listImports(): Promise<Import[]> {
+export async function listImports(userId?: string): Promise<Import[]> {
   return db
     .select()
     .from(imports)
+    .where(userId ? eq(imports.userId, userId) : undefined)
     .orderBy(desc(imports.importedAt))
 }
 
@@ -262,7 +309,7 @@ export async function listImports(): Promise<Import[]> {
 export async function insertStandaloneTransactions(transactionList: ImportTransaction[], userId?: string): Promise<void> {
   if (transactionList.length === 0) return
 
-  const toInsert = await filterDuplicateInstallments(transactionList)
+  const toInsert = await filterDuplicateInstallments(transactionList, userId)
   if (toInsert.length === 0) return
 
   await db.insert(transactions).values(
@@ -285,23 +332,37 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
 
 /**
  * Filtra transações que já existem no banco com mesma combinação de
- * date + description + amount + installmentCurrent + installmentTotal.
+ * date + description + amount + installmentCurrent + installmentTotal + userId.
+ * O filtro é ESTRITO por userId — nunca considera transações de outros usuários
+ * como duplicatas do usuário atual.
  * Retorna apenas as que NÃO são duplicatas.
  * Transações sem parcela (installmentCurrent == null) nunca são filtradas.
+ *
+ * IMPORTANTE: a data é incluída na comparação para evitar falsos positivos.
+ * Uma parcela 2/12 de março é diferente de uma parcela 2/12 de abril, mesmo
+ * tendo o mesmo nome e valor — são compras distintas.
  */
-export async function filterDuplicateInstallments(transactionList: ImportTransaction[]): Promise<ImportTransaction[]> {
+export async function filterDuplicateInstallments(transactionList: ImportTransaction[], userId?: string): Promise<ImportTransaction[]> {
   const result: ImportTransaction[] = []
 
   for (const t of transactionList) {
     if (t.installmentCurrent && t.installmentTotal) {
+      // Filtro estrito por userId: só considera transações do mesmo usuário como duplicatas.
+      // Transações de outros usuários com mesmo nome/valor NÃO são duplicatas.
+      const userCondition = userId
+        ? sql`AND ${transactions.userId} = ${userId}`
+        : sql`AND ${transactions.userId} IS NULL`
+
       const [existing] = await db
         .select({ id: transactions.id })
         .from(transactions)
         .where(
-          sql`${transactions.description} = ${t.description}
+          sql`${transactions.date} = ${t.date}
+            AND ${transactions.description} = ${t.description}
             AND ${transactions.amount} = ${t.amount}
             AND ${transactions.installmentCurrent} = ${t.installmentCurrent}
-            AND ${transactions.installmentTotal} = ${t.installmentTotal}`
+            AND ${transactions.installmentTotal} = ${t.installmentTotal}
+            ${userCondition}`
         )
         .limit(1)
 

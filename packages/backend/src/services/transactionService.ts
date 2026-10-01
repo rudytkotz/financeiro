@@ -382,15 +382,30 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
 
     if (Object.keys(propagateUpdates).length > 0) {
       propagateUpdates.updatedAt = new Date()
-      await db
-        .update(transactions)
-        .set(propagateUpdates)
-        .where(
-          sql`${transactions.id} != ${id}
-            AND ${transactions.description} = ${existing.description}
-            AND ${transactions.amount} = ${existing.amount}
-            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
-        )
+
+      // Se a transação pertence a uma importação, propagar por importId + installmentTotal
+      // (mais robusto do que description + amount + installmentTotal)
+      if (existing.importId !== null) {
+        await db
+          .update(transactions)
+          .set(propagateUpdates)
+          .where(
+            sql`${transactions.id} != ${id}
+              AND ${transactions.importId} = ${existing.importId}
+              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          )
+      } else {
+        // Fallback para transações manuais: usar description + amount + installmentTotal
+        await db
+          .update(transactions)
+          .set(propagateUpdates)
+          .where(
+            sql`${transactions.id} != ${id}
+              AND ${transactions.description} = ${existing.description}
+              AND ${transactions.amount} = ${existing.amount}
+              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          )
+      }
     }
   }
 
@@ -495,15 +510,26 @@ export async function associateDependent(
 
     // Propagar para todas as parcelas da mesma compra
     if (existing.installmentTotal && existing.installmentTotal > 1) {
-      await db
-        .update(transactions)
-        .set({ dependentId: null, updatedAt: new Date() })
-        .where(
-          sql`${transactions.id} != ${id}
-            AND ${transactions.description} = ${existing.description}
-            AND ${transactions.amount} = ${existing.amount}
-            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
-        )
+      if (existing.importId !== null) {
+        await db
+          .update(transactions)
+          .set({ dependentId: null, updatedAt: new Date() })
+          .where(
+            sql`${transactions.id} != ${id}
+              AND ${transactions.importId} = ${existing.importId}
+              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          )
+      } else {
+        await db
+          .update(transactions)
+          .set({ dependentId: null, updatedAt: new Date() })
+          .where(
+            sql`${transactions.id} != ${id}
+              AND ${transactions.description} = ${existing.description}
+              AND ${transactions.amount} = ${existing.amount}
+              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          )
+      }
     }
 
     return { transaction: updated }
@@ -544,15 +570,26 @@ export async function associateDependent(
 
   // Propagar para todas as parcelas da mesma compra
   if (existing.installmentTotal && existing.installmentTotal > 1) {
-    await db
-      .update(transactions)
-      .set({ dependentId, updatedAt: new Date() })
-      .where(
-        sql`${transactions.id} != ${id}
-          AND ${transactions.description} = ${existing.description}
-          AND ${transactions.amount} = ${existing.amount}
-          AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
-      )
+    if (existing.importId !== null) {
+      await db
+        .update(transactions)
+        .set({ dependentId, updatedAt: new Date() })
+        .where(
+          sql`${transactions.id} != ${id}
+            AND ${transactions.importId} = ${existing.importId}
+            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+        )
+    } else {
+      await db
+        .update(transactions)
+        .set({ dependentId, updatedAt: new Date() })
+        .where(
+          sql`${transactions.id} != ${id}
+            AND ${transactions.description} = ${existing.description}
+            AND ${transactions.amount} = ${existing.amount}
+            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+        )
+    }
   }
 
   return { transaction: updated }

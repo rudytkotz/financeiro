@@ -86,7 +86,7 @@ async function syncDefaultCategories(userId: string, existing: Category[]): Prom
 /**
  * Lists all categories for a user.
  * - First access: seeds the full default list.
- * - Subsequent accesses: syncs defaults (removes obsolete, adds missing).
+ * - Subsequent accesses: syncs defaults only when needed (missing or obsolete entries detected).
  */
 export async function listCategories(userId: string): Promise<Category[]> {
   const existing = await db
@@ -97,15 +97,20 @@ export async function listCategories(userId: string): Promise<Category[]> {
 
   if (existing.length === 0) {
     await seedCategoriesForUser(userId)
-  } else {
-    await syncDefaultCategories(userId, existing)
+    return db.select().from(categories).where(eq(categories.userId, userId)).orderBy(asc(categories.name))
   }
 
-  return db
-    .select()
-    .from(categories)
-    .where(eq(categories.userId, userId))
-    .orderBy(asc(categories.name))
+  // Sync only if needed: detect missing or obsolete default entries
+  const existingDefaultNames = new Set(existing.filter(c => c.isDefault).map(c => c.name.toLowerCase()))
+  const missingDefaults = DEFAULT_CATEGORIES.filter(c => !existingDefaultNames.has(c.name.toLowerCase()))
+  const obsoleteDefaults = existing.filter(c => c.isDefault && !DEFAULT_NAMES_SET.has(c.name.toLowerCase()))
+
+  if (missingDefaults.length > 0 || obsoleteDefaults.length > 0) {
+    await syncDefaultCategories(userId, existing)
+    return db.select().from(categories).where(eq(categories.userId, userId)).orderBy(asc(categories.name))
+  }
+
+  return existing
 }
 
 export async function createCategory(name: string, userId: string, color?: string | null): Promise<Category> {

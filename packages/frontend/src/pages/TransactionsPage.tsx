@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
 import { useDependents } from '@/hooks/useDependents'
@@ -66,7 +67,9 @@ type SortDir = 'asc' | 'desc'
 
 // ===========================================================================
 export default function TransactionsPage() {
-  const [month, setMonth] = useState(getCurrentMonth)
+  const location = useLocation()
+  const initialMonth = (location.state as { month?: string } | null)?.month ?? getCurrentMonth()
+  const [month, setMonth] = useState(initialMonth)
   const [categoryId, setCategoryId] = useState('')
   const [dependentId, setDependentId] = useState('')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('')

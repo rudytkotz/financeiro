@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useDependents } from '@/hooks/useDependents'
+import { useCategories } from '@/hooks/useCategories'
 import { useSetIncome } from '@/hooks/useMutations'
 import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal } from 'lucide-react'
 
@@ -48,6 +49,13 @@ export default function DashboardPage() {
     paymentMethod: catPaymentMethod || undefined,
   })
   const { data: dependents } = useDependents()
+  const { data: categories } = useCategories()
+
+  const categoryColorMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (categories) for (const c of categories) if (c.color) map.set(c.id, c.color)
+    return map
+  }, [categories])
 
   const hasNoData =
     dashboard &&
@@ -217,8 +225,8 @@ export default function DashboardPage() {
                         `${categoryName} (${(percentage ?? 0).toFixed(1)}%)`
                       }
                     >
-                      {(dashboard.expensesByCategory ?? []).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                      {(dashboard.expensesByCategory ?? []).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={categoryColorMap.get(entry.categoryId) ?? CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value: number) => [formatCurrency(value), 'Valor']} />
