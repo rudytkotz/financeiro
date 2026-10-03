@@ -1,4 +1,4 @@
-import { eq, desc, sql, and } from 'drizzle-orm'
+import { eq, desc, sql, and, inArray } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { imports, transactions, dependents } from '../db/schema.js'
 import type { Import } from '../db/schema.js'
@@ -38,9 +38,8 @@ export interface ImportTransaction {
 
 /**
  * Resolve portador names to dependent IDs.
- * If a portador name does not match an existing dependent (case-insensitive),
- * creates a new dependent automatically.
- * Returns a map of lowercase portador name → dependent ID.
+ * Se não existe, cria automaticamente.
+ * Usa UMA query para buscar todos de uma vez em vez de N queries.
  */
 export async function resolvePortadorToDependents(
   portadorNames: string[],
@@ -51,29 +50,31 @@ export async function resolvePortadorToDependents(
 
   // Deduplicate (case-insensitive)
   const uniqueNames = [...new Set(portadorNames.map((n) => n.trim()).filter(Boolean))]
+  const uniqueNamesLower = uniqueNames.map(n => n.toLowerCase())
 
-  for (const name of uniqueNames) {
-    // Check if dependent already exists for this user (case-insensitive)
-    const [existing] = await db
-      .select({ id: dependents.id, name: dependents.name })
-      .from(dependents)
-      .where(
-        userId
-          ? sql`lower(${dependents.name}) = lower(${name}) AND ${dependents.userId} = ${userId}`
-          : sql`lower(${dependents.name}) = lower(${name}) AND ${dependents.userId} IS NULL`
-      )
-      .limit(1)
+  // Buscar todos de uma vez com uma única query
+  const existing = await db
+    .select({ id: dependents.id, name: dependents.name })
+    .from(dependents)
+    .where(
+      userId
+        ? sql`lower(${dependents.name}) = ANY(${uniqueNamesLower}) AND ${dependents.userId} = ${userId}`
+        : sql`lower(${dependents.name}) = ANY(${uniqueNamesLower}) AND ${dependents.userId} IS NULL`
+    )
 
-    if (existing) {
-      result.set(name.toLowerCase(), existing.id)
-    } else {
-      // Auto-create dependent with userId
-      const [created] = await db
-        .insert(dependents)
-        .values({ name, userId: userId ?? null })
-        .returning()
-      result.set(name.toLowerCase(), created.id)
-    }
+  // Mapear os encontrados
+  for (const dep of existing) {
+    result.set(dep.name.toLowerCase(), dep.id)
+  }
+
+  // Criar apenas os que não existem (normalmente poucos ou nenhum)
+  const toCreate = uniqueNames.filter(n => !result.has(n.toLowerCase()))
+  for (const name of toCreate) {
+    const [created] = await db
+      .insert(dependents)
+      .values({ name, userId: userId ?? null })
+      .returning()
+    result.set(name.toLowerCase(), created.id)
   }
 
   return result
@@ -253,7 +254,7 @@ export async function overwriteImport(
         date: t.date,
         description: t.description,
         amount: t.amount,
-        categoryId: null as string | null, // será reaplicado abaixo se houver mapa
+        categoryId: null as string | null,
         dependentId: t.dependentId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
@@ -265,20 +266,33 @@ export async function overwriteImport(
       }))
     ).returning()
 
-    // Reaplicar categorizações: atualizar transações onde a descrição bate no mapa
+    // Reaplicar categorizações em batch: um único UPDATE por categoria única
+    // em vez de N updates individuais
     if (categorizationMap.size > 0) {
+      // Agrupar transações inseridas por chave de categorização
+      type BatchUpdate = { ids: string[]; categoryId: string | null; dependentId: string | null }
+      const batchMap = new Map<string, BatchUpdate>()
+
       for (const inserted of insertedTransactions) {
         const entry = categorizationMap.get(inserted.description.toLowerCase())
         if (entry && (entry.categoryId || entry.dependentId)) {
-          const reapply: Record<string, unknown> = { updatedAt: new Date() }
-          if (entry.categoryId) reapply.categoryId = entry.categoryId
-          if (entry.dependentId) reapply.dependentId = entry.dependentId
-
-          await tx
-            .update(transactions)
-            .set(reapply)
-            .where(eq(transactions.id, inserted.id))
+          const key = `${entry.categoryId ?? ''}|${entry.dependentId ?? ''}`
+          if (!batchMap.has(key)) {
+            batchMap.set(key, { ids: [], categoryId: entry.categoryId, dependentId: entry.dependentId })
+          }
+          batchMap.get(key)!.ids.push(inserted.id)
         }
+      }
+
+      // Um UPDATE por grupo de categorização única
+      for (const { ids, categoryId, dependentId } of batchMap.values()) {
+        const reapply: Record<string, unknown> = { updatedAt: new Date() }
+        if (categoryId) reapply.categoryId = categoryId
+        if (dependentId) reapply.dependentId = dependentId
+        await tx
+          .update(transactions)
+          .set(reapply)
+          .where(inArray(transactions.id, ids))
       }
     }
 
@@ -333,46 +347,54 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
 /**
  * Filtra transações que já existem no banco com mesma combinação de
  * date + description + amount + installmentCurrent + installmentTotal + userId.
- * O filtro é ESTRITO por userId — nunca considera transações de outros usuários
- * como duplicatas do usuário atual.
- * Retorna apenas as que NÃO são duplicatas.
- * Transações sem parcela (installmentCurrent == null) nunca são filtradas.
  *
- * IMPORTANTE: a data é incluída na comparação para evitar falsos positivos.
- * Uma parcela 2/12 de março é diferente de uma parcela 2/12 de abril, mesmo
- * tendo o mesmo nome e valor — são compras distintas.
+ * Em vez de N queries (uma por transação), faz UMA query trazendo todos os
+ * registros existentes para o usuário e mês relevantes, depois filtra em memória.
+ * Isso elimina o N+1 e reduz o tempo de 65 queries para 1.
  */
 export async function filterDuplicateInstallments(transactionList: ImportTransaction[], userId?: string): Promise<ImportTransaction[]> {
-  const result: ImportTransaction[] = []
+  // Separar parceladas das não-parceladas — não-parceladas nunca são filtradas
+  const installmented = transactionList.filter(t => t.installmentCurrent && t.installmentTotal)
+  const nonInstallmented = transactionList.filter(t => !t.installmentCurrent || !t.installmentTotal)
 
-  for (const t of transactionList) {
-    if (t.installmentCurrent && t.installmentTotal) {
-      // Filtro estrito por userId: só considera transações do mesmo usuário como duplicatas.
-      // Transações de outros usuários com mesmo nome/valor NÃO são duplicatas.
-      const userCondition = userId
-        ? sql`AND ${transactions.userId} = ${userId}`
-        : sql`AND ${transactions.userId} IS NULL`
+  if (installmented.length === 0) return transactionList
 
-      const [existing] = await db
-        .select({ id: transactions.id })
-        .from(transactions)
-        .where(
-          sql`${transactions.date} = ${t.date}
-            AND ${transactions.description} = ${t.description}
-            AND ${transactions.amount} = ${t.amount}
-            AND ${transactions.installmentCurrent} = ${t.installmentCurrent}
-            AND ${transactions.installmentTotal} = ${t.installmentTotal}
-            ${userCondition}`
-        )
-        .limit(1)
+  // Buscar todas as parcelas existentes do usuário de uma vez só
+  // usando as datas como filtro para reduzir o resultado
+  const uniqueDates = [...new Set(installmented.map(t => t.date))]
 
-      if (!existing) {
-        result.push(t)
-      }
-    } else {
-      result.push(t)
-    }
-  }
+  const userCondition = userId
+    ? sql`${transactions.userId} = ${userId}`
+    : sql`${transactions.userId} IS NULL`
 
-  return result
+  const existingRows = await db
+    .select({
+      date: transactions.date,
+      description: transactions.description,
+      amount: transactions.amount,
+      installmentCurrent: transactions.installmentCurrent,
+      installmentTotal: transactions.installmentTotal,
+    })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.date, uniqueDates),
+        userCondition,
+        sql`${transactions.installmentCurrent} IS NOT NULL`
+      )
+    )
+
+  // Criar um Set de chaves para lookup O(1)
+  const existingSet = new Set(
+    existingRows.map(r =>
+      `${r.date}|${r.description}|${r.amount}|${r.installmentCurrent}|${r.installmentTotal}`
+    )
+  )
+
+  const filteredInstallmented = installmented.filter(t => {
+    const key = `${t.date}|${t.description}|${t.amount}|${t.installmentCurrent}|${t.installmentTotal}`
+    return !existingSet.has(key)
+  })
+
+  return [...nonInstallmented, ...filteredInstallmented]
 }
