@@ -537,7 +537,18 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
       </td>
       <td className="px-4 py-3 text-center">
         {t.installmentCurrent && t.installmentTotal
-          ? <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">{t.installmentCurrent}/{t.installmentTotal}</span>
+          ? (
+            <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold ${
+              t.installmentCurrent === t.installmentTotal
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-gray-100 text-gray-500'
+            }`}>
+              {t.installmentCurrent}/{t.installmentTotal}
+              {t.installmentCurrent === t.installmentTotal && (
+                <span title="Última parcela">✓</span>
+              )}
+            </span>
+          )
           : <span className="text-gray-200">—</span>}
       </td>
       <td className="px-4 py-3">
@@ -583,7 +594,14 @@ function MobCard({ t, cats, deps, catMap, onDesc, onCat, onAmt, onPm, onDel }: M
           <div className="flex flex-col">
             <span className="text-[11px] font-medium text-gray-400">{formatDate(t.date)}</span>
             {t.installmentCurrent && t.installmentTotal && (
-              <span className="text-[9px] font-bold text-gray-300">{t.installmentCurrent}/{t.installmentTotal}</span>
+              <span className={`text-[9px] font-bold ${
+                t.installmentCurrent === t.installmentTotal
+                  ? 'text-emerald-500'
+                  : 'text-gray-300'
+              }`}>
+                {t.installmentCurrent}/{t.installmentTotal}
+                {t.installmentCurrent === t.installmentTotal && ' ✓'}
+              </span>
             )}
           </div>
         </div>
