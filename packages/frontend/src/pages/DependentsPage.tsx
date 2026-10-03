@@ -4,7 +4,8 @@ import { useCreateDependent } from '@/hooks/useMutations'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { AxiosError } from 'axios'
-import { Plus, Users, Trash2 } from 'lucide-react'
+import type { Dependent } from '@financeiro/shared'
+import { Plus, Users, Trash2, Star } from 'lucide-react'
 
 interface ApiErrorResponse {
   statusCode: number
@@ -24,7 +25,10 @@ export default function DependentsPage() {
 
   const deleteMutation = useMutation<void, AxiosError<ApiErrorResponse>, string>({
     mutationFn: async (id: string) => { await api.delete(`/api/dependents/${id}`) },
-    onSuccess: () => { setDeleteError(null); queryClient.invalidateQueries({ queryKey: ['dependents'] }) },
+    onSuccess: () => {
+      setDeleteError(null)
+      queryClient.invalidateQueries({ queryKey: ['dependents'] })
+    },
     onError: (error) => {
       const data = error.response?.data
       if (error.response?.status === 409 && data?.code === 'HAS_TRANSACTIONS') {
@@ -35,7 +39,21 @@ export default function DependentsPage() {
     },
   })
 
+  const setMainMutation = useMutation<Dependent, AxiosError<ApiErrorResponse>, string>({
+    mutationFn: async (id: string) => {
+      const { data } = await api.put(`/api/dependents/${id}/main`)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dependents'] })
+    },
+    onError: () => {
+      setDeleteError('Ocorreu um erro ao definir o dependente principal.')
+    },
+  })
+
   const isAtLimit = dependents.length >= 10
+  const mainDependent = dependents.find((d) => d.isMain)
 
   function validate(value: string): string | null {
     const trimmed = value.trim()
@@ -69,6 +87,17 @@ export default function DependentsPage() {
     )
   }
 
+  function handleToggleMain(dep: Dependent) {
+    // Se já é principal, remove (chama a rota de remover principal)
+    if (dep.isMain) {
+      api.delete('/api/dependents/main').then(() => {
+        queryClient.invalidateQueries({ queryKey: ['dependents'] })
+      })
+    } else {
+      setMainMutation.mutate(dep.id)
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-2xl">
       {/* Header */}
@@ -79,7 +108,12 @@ export default function DependentsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-gray-900">Dependentes</h1>
-            <p className="text-xs text-gray-400 mt-0.5">Pessoas associadas às suas transações</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Pessoas associadas às suas transações
+              {mainDependent && (
+                <span className="ml-1 text-violet-500 font-medium">· Principal: {mainDependent.name}</span>
+              )}
+            </p>
           </div>
         </div>
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -87,6 +121,13 @@ export default function DependentsPage() {
         }`}>
           {dependents.length}/10
         </span>
+      </div>
+
+      {/* Banner informativo sobre dependente principal */}
+      <div className="rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3 text-xs text-violet-700">
+        <span className="font-semibold">⭐ Dependente principal:</span>{' '}
+        o dependente marcado como principal é pré-selecionado automaticamente ao criar uma nova transação.
+        Clique na estrela para definir ou remover.
       </div>
 
       {/* Formulário */}
@@ -150,22 +191,51 @@ export default function DependentsPage() {
       ) : (
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <ul className="divide-y divide-gray-50">
-            {dependents.map((dependent) => (
-              <li key={dependent.id} className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50/50 transition">
+            {dependents.map((dep) => (
+              <li key={dep.id} className="flex items-center justify-between px-4 py-3.5 hover:bg-gray-50/50 transition group">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-100 text-xs font-bold text-violet-600">
-                    {dependent.name.slice(0, 2).toUpperCase()}
+                  {/* Avatar */}
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold transition ${
+                    dep.isMain ? 'bg-violet-500 text-white' : 'bg-violet-100 text-violet-600'
+                  }`}>
+                    {dep.name.slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="text-sm font-medium text-gray-800">{dependent.name}</span>
+                  <div>
+                    <span className="text-sm font-medium text-gray-800">{dep.name}</span>
+                    {dep.isMain && (
+                      <span className="ml-2 rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-600">
+                        Principal
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => { setDeleteError(null); setApiError(null); deleteMutation.mutate(dependent.id) }}
-                  disabled={deleteMutation.isPending}
-                  className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 disabled:opacity-40 transition"
-                  aria-label={`Excluir ${dependent.name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+
+                <div className="flex items-center gap-1">
+                  {/* Botão de estrela — define/remove principal */}
+                  <button
+                    onClick={() => handleToggleMain(dep)}
+                    disabled={setMainMutation.isPending}
+                    title={dep.isMain ? 'Remover como principal' : 'Definir como principal'}
+                    aria-label={dep.isMain ? `Remover ${dep.name} como principal` : `Definir ${dep.name} como principal`}
+                    className={`rounded-lg p-1.5 transition ${
+                      dep.isMain
+                        ? 'text-amber-400 hover:text-amber-500 hover:bg-amber-50'
+                        : 'text-gray-200 opacity-0 group-hover:opacity-100 hover:text-amber-400 hover:bg-amber-50'
+                    }`}
+                  >
+                    <Star className={`h-3.5 w-3.5 ${dep.isMain ? 'fill-amber-400' : ''}`} />
+                  </button>
+
+                  {/* Botão excluir */}
+                  <button
+                    onClick={() => { setDeleteError(null); setApiError(null); deleteMutation.mutate(dep.id) }}
+                    disabled={deleteMutation.isPending}
+                    className="rounded-lg p-1.5 text-gray-200 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 disabled:opacity-40 transition"
+                    aria-label={`Excluir ${dep.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

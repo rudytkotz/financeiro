@@ -71,6 +71,13 @@
       "when": 1724900000000,
       "tag": "0009_add_category_color",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1725000000000,
+      "tag": "0010_dependents_is_main",
+      "breakpoints": true
     }
   ]
 }

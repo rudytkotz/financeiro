@@ -27,6 +27,7 @@ export interface Category {
 export interface Dependent {
   id: string
   name: string           // max 50 chars
+  isMain: boolean        // dependente principal do usuário
 }
 
 export interface Income {
@@ -83,6 +84,7 @@ export interface CreateTransactionPayload {
   description: string
   amount: number         // centavos (valor absoluto — o sinal é definido por operationType)
   categoryId: string
+  dependentId?: string | null  // dependente associado à transação
   operationType?: 'despesa' | 'reembolso'  // 'despesa' = positivo (padrão); 'reembolso' = negativo
   installmentTotal?: number                // 1 ou undefined = à vista; 2–24 = parcelado
 }

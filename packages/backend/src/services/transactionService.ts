@@ -39,6 +39,7 @@ export interface CreateTransactionData {
   description: string
   amount: number
   categoryId: string
+  dependentId?: string | null
   operationType?: 'despesa' | 'reembolso'
   installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
   paymentMethod?: string
@@ -157,7 +158,6 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
 export async function createTransaction(data: CreateTransactionData, userId?: string): Promise<Transaction> {
   const { date, description, categoryId, operationType, paymentMethod } = data
   let { amount } = data
-
   // Aplicar sinal baseado no tipo de operação
   if (operationType === 'reembolso') {
     // Reembolso: garantir que o valor seja negativo
@@ -217,7 +217,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
         description: trimmedDesc,
         amount,
         categoryId,
-        dependentId: null,
+        dependentId: data.dependentId ?? null,
         source: 'manual',
         importId: null,
         referenceMonth: date.substring(0, 7),
@@ -230,7 +230,6 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
   }
 
   // Com parcelamento — inserir N registros, um por mês
-  // O valor de cada parcela é Math.round(total / N); a primeira parcela absorve o centavo residual
   const perInstallment = Math.floor(Math.abs(amount) / parsedInstallments)
   const remainder = Math.abs(amount) - perInstallment * parsedInstallments
   const signedPer = amount < 0 ? -perInstallment : perInstallment
@@ -238,15 +237,12 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
   const [baseYear, baseMonth, baseDay] = date.split('-').map(Number)
 
   const rows = Array.from({ length: parsedInstallments }, (_, i) => {
-    // Avança i meses a partir da data base
     const d = new Date(baseYear, baseMonth - 1 + i, 1)
-    // Usa o mesmo dia da data original, ou o último dia do mês se ultrapassar
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
     const day = Math.min(baseDay, lastDay)
     const installDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     const refMonth = installDate.substring(0, 7)
 
-    // Primeira parcela recebe o centavo residual
     const installAmount = i === 0
       ? (amount < 0 ? -(perInstallment + remainder) : perInstallment + remainder)
       : signedPer
@@ -256,7 +252,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
       description: trimmedDesc,
       amount: installAmount,
       categoryId,
-      dependentId: null as string | null,
+      dependentId: data.dependentId ?? null as string | null,
       source: 'manual' as const,
       importId: null as string | null,
       referenceMonth: refMonth,

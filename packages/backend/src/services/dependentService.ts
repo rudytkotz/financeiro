@@ -52,6 +52,40 @@ export async function createDependent(name: string, userId: string): Promise<Dep
   return created
 }
 
+/**
+ * Define o dependente principal do usuário.
+ * Remove o flag isMain de todos os outros dependentes do mesmo usuário
+ * e seta isMain = true no dependente especificado.
+ * Se id = null, apenas remove o flag de todos (sem principal).
+ */
+export async function setMainDependent(id: string | null, userId: string): Promise<Dependent | null> {
+  // Remover isMain de todos os dependentes do usuário
+  await db
+    .update(dependents)
+    .set({ isMain: false })
+    .where(eq(dependents.userId, userId))
+
+  if (!id) return null
+
+  // Verificar que o dependente pertence ao usuário
+  const [dep] = await db
+    .select()
+    .from(dependents)
+    .where(and(eq(dependents.id, id), eq(dependents.userId, userId)))
+    .limit(1)
+
+  if (!dep) throw makeError(404, 'NOT_FOUND', 'Dependente não encontrado.')
+
+  // Setar como principal
+  const [updated] = await db
+    .update(dependents)
+    .set({ isMain: true })
+    .where(eq(dependents.id, id))
+    .returning()
+
+  return updated
+}
+
 export async function deleteDependent(id: string, userId: string): Promise<void> {
   const [{ total }] = await db
     .select({ total: count() })

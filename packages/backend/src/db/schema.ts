@@ -54,6 +54,7 @@ export const dependents = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: varchar('name', { length: 50 }).notNull(),
+    isMain: boolean('is_main').notNull().default(false), // dependente principal do usuário
     userId: uuid('user_id').references(() => users.id),
   },
   (table) => ({

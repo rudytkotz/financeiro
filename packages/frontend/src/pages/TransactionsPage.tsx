@@ -201,7 +201,7 @@ export default function TransactionsPage() {
   const clearFilters = () => { setCategoryId(''); setDependentId(''); setPaymentMethodFilter(''); setSearchText('') }
   function handleOpenCreate() { setEditingTransaction(null); setModalOpen(true) }
   function handleCloseModal() { setModalOpen(false); setEditingTransaction(null) }
-  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string }) {
+  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; dependentId: string | null; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string }) {
     if (editingTransaction) await updateMutation.mutateAsync({ id: editingTransaction.id, payload: data })
     else await createMutation.mutateAsync(data)
   }
@@ -490,7 +490,7 @@ export default function TransactionsPage() {
       )}
 
       {/* Modals */}
-      <TransactionModal open={modalOpen} onClose={handleCloseModal} onSubmit={handleSubmit} categories={categories ?? []} transaction={editingTransaction} />
+      <TransactionModal open={modalOpen} onClose={handleCloseModal} onSubmit={handleSubmit} categories={categories ?? []} dependents={dependents ?? []} transaction={editingTransaction} />
       <ConfirmDialog open={deleteDialogOpen} title="Excluir transação" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" cancelLabel="Cancelar" onConfirm={handleConfirmDelete} onCancel={() => { setDeleteDialogOpen(false); setTransactionToDelete(null) }} isLoading={deleteMutation.isPending} />
       <ConfirmDialog open={deleteAllDialogOpen} title="Excluir tudo" message={`Excluir todas as ${transactions.length} transações deste mês?`} confirmLabel="Sim, excluir" cancelLabel="Cancelar" onConfirm={handleConfirmDeleteAll} onCancel={() => setDeleteAllDialogOpen(false)} isLoading={deleteAllMutation.isPending} />
     </div>
