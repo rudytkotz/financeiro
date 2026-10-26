@@ -8,6 +8,13 @@ import type {
   AllocationSlice,
   EvolutionPoint,
   Quote,
+  DividendSummary,
+  MaturityAlert,
+  PortfolioSnapshot,
+  AllocationTarget,
+  RebalanceRow,
+  CreateDividendPayload,
+  SetTargetPayload,
   CreateInvestmentRvPayload,
   CreateInvestmentRfPayload,
   CreateInvestmentTransactionPayload,
@@ -141,6 +148,98 @@ export function useDeleteInvestmentTransaction() {
   const qc = useQueryClient()
   return useMutation<void, Error, string>({
     mutationFn: async (txId) => { await api.delete(`/api/investments/transactions/${txId}`) },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+// ---- Proventos ----
+
+export function useDividends() {
+  return useQuery<DividendSummary>({
+    queryKey: ['investments', 'dividends'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/dividends')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useAddDividend() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, CreateDividendPayload>({
+    mutationFn: async (payload) => {
+      const { data } = await api.post('/api/investments/dividends', payload)
+      return data
+    },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+export function useDeleteDividend() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, string>({
+    mutationFn: async (id) => { await api.delete(`/api/investments/dividends/${id}`) },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+// ---- Alertas de vencimento ----
+
+export function useMaturityAlerts() {
+  return useQuery<MaturityAlert[]>({
+    queryKey: ['investments', 'maturity-alerts'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/maturity-alerts')
+      return data
+    },
+    staleTime: 60 * 60 * 1000,
+  })
+}
+
+// ---- Snapshots ----
+
+export function useSnapshots() {
+  return useQuery<PortfolioSnapshot[]>({
+    queryKey: ['investments', 'snapshots'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/snapshots')
+      return data
+    },
+    staleTime: 10 * 60 * 1000,
+  })
+}
+
+// ---- Rebalanceamento ----
+
+export function useAllocationTargets() {
+  return useQuery<AllocationTarget[]>({
+    queryKey: ['investments', 'targets'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/targets')
+      return data
+    },
+  })
+}
+
+export function useRebalance() {
+  return useQuery<RebalanceRow[]>({
+    queryKey: ['investments', 'rebalance'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/rebalance')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useSetTargets() {
+  const qc = useQueryClient()
+  return useMutation<AllocationTarget[], Error, SetTargetPayload[]>({
+    mutationFn: async (targets) => {
+      const { data } = await api.put('/api/investments/targets', { targets })
+      return data
+    },
     onSuccess: () => invalidateAll(qc),
   })
 }

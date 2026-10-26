@@ -14,20 +14,22 @@
 - [x] Integrar CDI/Selic via API do Banco Central (SGS, gratuita, sem token)
 - [x] Calcular valor atualizado da renda fixa com base na taxa contratada (pos_cdi, prefixado, ipca_mais) e tempo decorrido
 - [x] Mostrar rendimento estimado de cada ativo de RF
-- [ ] Integrar série real do IPCA (hoje usa estimativa de 4.5% a.a. para ipca_mais)
-- [ ] Alertar sobre vencimentos próximos
+- [x] Integrar série real do IPCA (série 433 do BC, acumulado 12m)
+- [x] Alertar sobre vencimentos próximos (próximos 60 dias)
 
-## v3 — proventos e dividendos
-- [ ] Registrar proventos recebidos (dividendos, JCP, rendimentos de FII)
-- [ ] Calcular dividend yield da carteira
-- [ ] Histórico de proventos por ativo
+## v3 — proventos e dividendos (implementado)
+- [x] Registrar proventos recebidos (dividendos, JCP, rendimentos de FII)
+- [x] Calcular dividend yield da carteira e yield on cost
+- [x] Histórico de proventos + gráfico mensal (12 meses)
+- [x] Buscar histórico de dividendos do Yahoo (endpoint disponível, usado sob demanda)
 
-## v4 — análise e relatórios (parcialmente implementado)
-- [x] Gráfico de pizza da alocação da carteira (por ativo)
+## v4 — análise e relatórios (implementado em grande parte)
+- [x] Gráfico de pizza da alocação da carteira (por ativo e por classe)
 - [x] Comparação aportado vs CDI (100%) em gráfico de linha mensal
-- [x] Abas separadas para Renda Variável e Renda Fixa
-- [ ] Snapshots mensais reais do patrimônio (hoje reconstrói via aportes + CDI)
-- [ ] Benchmark vs IBOV além do CDI
+- [x] Snapshots mensais reais do patrimônio (gravados ao abrir a página; gráfico usa reais após 2 meses)
+- [x] Abas separadas para Renda Variável e Renda Fixa, com agrupamento por classe
+- [x] Rebalanceamento: metas de alocação por classe + sugestão de aportes
+- [ ] Benchmark vs IBOV além do CDI (endpoint ^BVSP via Yahoo — pendente)
 - [ ] Relatório de imposto de renda (apuração de lucro em vendas, DARF)
 
 ## v5 — automação e dados

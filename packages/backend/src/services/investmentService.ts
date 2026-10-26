@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes } from './quoteService.js'
-import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries } from './rateService.js'
+import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m } from './rateService.js'
 
 export interface ServiceError {
   statusCode: number
@@ -392,9 +392,9 @@ async function estimateRfCurrentValue(inv: Investment): Promise<{ currentValue: 
   }
 
   if (inv.rateType === 'ipca_mais') {
-    // Sem série do IPCA integrada; estima IPCA ~4.5% a.a. + spread contratado
-    const ipcaEstimate = 4.5
-    const totalRate = ipcaEstimate + ratePct
+    // IPCA real acumulado 12m (via BC) + spread contratado
+    const ipcaAnnual = await getIpcaAccumulated12m()
+    const totalRate = ipcaAnnual + ratePct
     const factor = Math.pow(1 + totalRate / 100, years)
     return { currentValue: Math.round(invested * factor), cdiAnnual }
   }

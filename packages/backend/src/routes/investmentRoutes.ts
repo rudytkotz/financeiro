@@ -16,7 +16,20 @@ import {
   type CreateRfData,
   type CreateTxData,
 } from '../services/investmentService.js'
-import { getQuote } from '../services/quoteService.js'
+import { getQuote, getDividendHistory } from '../services/quoteService.js'
+import {
+  addDividend,
+  deleteDividend,
+  getDividendSummary,
+  getMaturityAlerts,
+  recordSnapshot,
+  getSnapshots,
+  getAllocationTargets,
+  setAllocationTargets,
+  getRebalance,
+  type CreateDividendData,
+  type SetTargetData,
+} from '../services/investmentAdvancedService.js'
 
 function isServiceError(err: unknown): err is ServiceError {
   return typeof err === 'object' && err !== null && 'statusCode' in err && 'code' in err && 'message' in err
@@ -61,6 +74,76 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/investments/evolution', async (request, reply) => {
     const evolution = await getEvolution(getUserId(request))
     return reply.send(evolution)
+  })
+
+  // ---- Proventos ----
+  app.get('/api/investments/dividends', async (request, reply) => {
+    const summary = await getDividendSummary(getUserId(request))
+    return reply.send(summary)
+  })
+
+  app.post('/api/investments/dividends', async (request, reply) => {
+    try {
+      const div = await addDividend(request.body as CreateDividendData, getUserId(request))
+      return reply.status(201).send(div)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  app.delete('/api/investments/dividends/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      await deleteDividend(id, getUserId(request))
+      return reply.status(204).send()
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  // Sugestão de dividendos do Yahoo (valor por cota — usuário confirma)
+  app.get('/api/investments/dividend-history/:ticker', async (request, reply) => {
+    const { ticker } = request.params as { ticker: string }
+    const history = await getDividendHistory(ticker)
+    return reply.send(history)
+  })
+
+  // ---- Alertas de vencimento ----
+  app.get('/api/investments/maturity-alerts', async (request, reply) => {
+    const alerts = await getMaturityAlerts(getUserId(request))
+    return reply.send(alerts)
+  })
+
+  // ---- Snapshots / histórico de patrimônio ----
+  app.get('/api/investments/snapshots', async (request, reply) => {
+    // Grava o snapshot do mês atual e retorna o histórico
+    await recordSnapshot(getUserId(request))
+    const snapshots = await getSnapshots(getUserId(request))
+    return reply.send(snapshots)
+  })
+
+  // ---- Rebalanceamento ----
+  app.get('/api/investments/targets', async (request, reply) => {
+    const targets = await getAllocationTargets(getUserId(request))
+    return reply.send(targets)
+  })
+
+  app.put('/api/investments/targets', async (request, reply) => {
+    try {
+      const { targets } = request.body as { targets: SetTargetData[] }
+      const saved = await setAllocationTargets(targets ?? [], getUserId(request))
+      return reply.send(saved)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  app.get('/api/investments/rebalance', async (request, reply) => {
+    const rebalance = await getRebalance(getUserId(request))
+    return reply.send(rebalance)
   })
 
   // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar)

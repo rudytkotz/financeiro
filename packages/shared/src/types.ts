@@ -133,6 +133,81 @@ export interface EvolutionPoint {
   cdiProjected: number   // centavos: valor projetado no CDI
 }
 
+// Proventos
+export interface InvestmentDividend {
+  id: string
+  investmentId: string
+  kind: string           // 'dividendo' | 'jcp' | 'rendimento'
+  amount: number         // centavos
+  date: string           // YYYY-MM-DD
+  createdAt: string
+  investmentName: string
+  ticker: string | null
+}
+
+export interface DividendSummary {
+  dividends: InvestmentDividend[]
+  totalReceived: number
+  totalLast12m: number
+  byMonth: Array<{ month: string; amount: number }>
+  portfolioYield: number    // dividend yield da carteira (%)
+  yieldOnCost: number       // yield on cost (%)
+}
+
+export interface CreateDividendPayload {
+  investmentId: string
+  kind?: 'dividendo' | 'jcp' | 'rendimento'
+  amount: number    // centavos
+  date: string
+}
+
+export interface DividendHistoryEvent {
+  date: string      // YYYY-MM-DD
+  amount: number    // reais por cota
+}
+
+// Alertas de vencimento (RF)
+export interface MaturityAlert {
+  investmentId: string
+  name: string
+  maturityDate: string
+  daysUntil: number
+  investedAmount: number
+}
+
+// Snapshot mensal do patrimônio
+export interface PortfolioSnapshot {
+  id: string
+  month: string          // YYYY-MM
+  totalInvested: number
+  totalCurrent: number
+  rendaVariavel: number
+  rendaFixa: number
+  createdAt: string
+}
+
+// Rebalanceamento
+export interface AllocationTarget {
+  id: string
+  assetClass: string
+  targetPct: number      // % * 100
+  userId?: string
+}
+
+export interface RebalanceRow {
+  assetClass: string
+  currentValue: number
+  currentPct: number
+  targetPct: number
+  diffPct: number
+  suggestedAmount: number
+}
+
+export interface SetTargetPayload {
+  assetClass: string
+  targetPct: number      // % * 100
+}
+
 // Payloads
 
 export interface CreateInvestmentRvPayload {

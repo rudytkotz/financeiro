@@ -196,3 +196,50 @@ export async function getQuote(ticker: string): Promise<Quote | null> {
   const quotes = await getQuotes([ticker])
   return quotes.get(normalizeTicker(ticker)) ?? null
 }
+
+export interface DividendEvent {
+  date: string   // YYYY-MM-DD
+  amount: number // reais por cota/ação (float)
+}
+
+/**
+ * Busca o histórico de dividendos/proventos de um ticker no Yahoo Finance,
+ * nos últimos ~2 anos. Retorna valor POR cota/ação (não total).
+ * Usado para sugerir proventos ao usuário (ele confirma a quantidade).
+ */
+export async function getDividendHistory(ticker: string): Promise<DividendEvent[]> {
+  const t = normalizeTicker(ticker)
+  try {
+    const url = `${YAHOO_BASE}/${t}.SA?interval=1d&range=2y&events=div`
+    const resp = await fetch(url, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (compatible; FinanceiroApp/1.0)',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!resp.ok) return []
+
+    const data = await resp.json() as {
+      chart?: {
+        result?: Array<{
+          events?: {
+            dividends?: Record<string, { amount: number; date: number }>
+          }
+        }>
+      }
+    }
+
+    const dividends = data.chart?.result?.[0]?.events?.dividends
+    if (!dividends) return []
+
+    return Object.values(dividends)
+      .map((d) => ({
+        date: new Date(d.date * 1000).toISOString().slice(0, 10),
+        amount: d.amount,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  } catch {
+    return []
+  }
+}

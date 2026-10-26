@@ -10,15 +10,22 @@ import {
   useAllocation,
   useEvolution,
   useDeleteInvestment,
+  useDividends,
+  useMaturityAlerts,
+  useSnapshots,
+  useRebalance,
+  useDeleteDividend,
 } from '@/hooks/useInvestments'
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
-  LineChart as LineIcon, Wallet, Percent, ChevronDown,
+  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle,
 } from 'lucide-react'
 import NewRvModal from '@/components/investments/NewRvModal'
 import NewRfModal from '@/components/investments/NewRfModal'
 import RvTransactionsModal from '@/components/investments/RvTransactionsModal'
+import DividendModal from '@/components/investments/DividendModal'
+import TargetsModal from '@/components/investments/TargetsModal'
 
 function fmt(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -47,6 +54,9 @@ const RV_CLASS_LABELS: Record<string, string> = {
   acao: 'Ações', fii: 'Fundos Imobiliários', etf: 'ETFs', bdr: 'BDRs', outro: 'Outros',
 }
 const RV_CLASS_ORDER = ['acao', 'fii', 'etf', 'bdr', 'outro']
+const ALL_CLASS_LABELS: Record<string, string> = {
+  acao: 'Ações', fii: 'Fundos Imobiliários', etf: 'ETFs', bdr: 'BDRs', outro: 'Outros', renda_fixa: 'Renda Fixa',
+}
 const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6', '#ef4444', '#a855f7']
 
 type Tab = 'rv' | 'rf'
@@ -59,10 +69,17 @@ export default function InvestmentsPage() {
   const { data: rfPositions, isLoading: loadingRf } = useRfPositions()
   const { data: allocation } = useAllocation()
   const { data: evolution } = useEvolution()
+  const { data: dividends } = useDividends()
+  const { data: maturityAlerts } = useMaturityAlerts()
+  const { data: snapshots } = useSnapshots()
+  const { data: rebalance } = useRebalance()
   const deleteMutation = useDeleteInvestment()
+  const deleteDividendMutation = useDeleteDividend()
 
   const [rvModalOpen, setRvModalOpen] = useState(false)
   const [rfModalOpen, setRfModalOpen] = useState(false)
+  const [dividendModalOpen, setDividendModalOpen] = useState(false)
+  const [targetsModalOpen, setTargetsModalOpen] = useState(false)
   const [txModalInvestment, setTxModalInvestment] = useState<RvPosition | null>(null)
   const [tab, setTab] = useState<Tab>('rv')
   const [rvFilter, setRvFilter] = useState<RvFilter>('todos')
@@ -110,14 +127,28 @@ export default function InvestmentsPage() {
       .map(c => ({ classKey: c, label: RV_CLASS_LABELS[c] ?? c, positions: groups.get(c)! }))
   }, [filteredRv])
 
-  // Dados do gráfico de evolução
+  // Dados do gráfico de evolução.
+  // Usa snapshots reais quando houver (>= 2 meses); senão cai no cálculo aportado vs CDI.
+  const useSnapshotData = (snapshots ?? []).length >= 2
   const evolutionData = useMemo(() => {
+    if (useSnapshotData) {
+      return (snapshots ?? []).map(s => ({
+        month: monthLabel(s.month),
+        Patrimônio: s.totalCurrent / 100,
+        Aportado: s.totalInvested / 100,
+      }))
+    }
     return (evolution ?? []).map(p => ({
       month: monthLabel(p.month),
       Aportado: p.invested / 100,
       'CDI (100%)': p.cdiProjected / 100,
     }))
-  }, [evolution])
+  }, [evolution, snapshots, useSnapshotData])
+
+  // Dados do gráfico de dividendos (12 meses)
+  const dividendChartData = useMemo(() => {
+    return (dividends?.byMonth ?? []).map(d => ({ month: monthLabel(d.month), valor: d.amount / 100 }))
+  }, [dividends])
 
   // Dados do gráfico de alocação
   const allocationData = useMemo(() => {
@@ -169,7 +200,15 @@ export default function InvestmentsPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setTargetsModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition active:scale-95">
+            <Target className="h-4 w-4" /> Metas
+          </button>
+          <button onClick={() => setDividendModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition active:scale-95">
+            <Coins className="h-4 w-4" /> Provento
+          </button>
           <button onClick={() => setRfModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition active:scale-95">
             <Landmark className="h-4 w-4" /> Renda fixa
@@ -180,6 +219,27 @@ export default function InvestmentsPage() {
           </button>
         </div>
       </div>
+
+      {/* Alertas de vencimento */}
+      {(maturityAlerts ?? []).length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <span className="text-sm font-bold text-amber-800">Vencimentos próximos</span>
+          </div>
+          <div className="space-y-1.5">
+            {(maturityAlerts ?? []).map((a) => (
+              <div key={a.investmentId} className="flex items-center justify-between text-xs text-amber-700">
+                <span className="font-medium">{a.name}</span>
+                <span>
+                  {a.daysUntil === 0 ? 'vence hoje' : `em ${a.daysUntil} dia${a.daysUntil > 1 ? 's' : ''}`}
+                  {' · '}{fmt(a.investedAmount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Cards resumo */}
       {summary && (
@@ -257,13 +317,14 @@ export default function InvestmentsPage() {
           )}
         </div>
 
-        {/* Patrimônio vs CDI */}
+        {/* Evolução: patrimônio real (snapshots) ou aportado vs CDI */}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-4">
-            <Percent className="h-4 w-4 text-blue-500" /> Aportado vs CDI (100%)
+            <Percent className="h-4 w-4 text-blue-500" />
+            {useSnapshotData ? 'Evolução do patrimônio' : 'Aportado vs CDI (100%)'}
           </h2>
           {evolutionData.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-10">Cadastre aportes para ver a comparação com o CDI.</p>
+            <p className="text-sm text-gray-400 text-center py-10">Cadastre aportes para ver a evolução.</p>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={evolutionData}>
@@ -272,14 +333,133 @@ export default function InvestmentsPage() {
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="Aportado" stroke="#10b981" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="CDI (100%)" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                {useSnapshotData ? (
+                  <>
+                    <Line type="monotone" dataKey="Patrimônio" stroke="#10b981" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="Aportado" stroke="#9ca3af" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                  </>
+                ) : (
+                  <>
+                    <Line type="monotone" dataKey="Aportado" stroke="#10b981" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="CDI (100%)" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                  </>
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
           <p className="mt-2 text-[10px] text-gray-400">
-            Compara o total aportado com o quanto renderia no CDI. Rentabilidade de RF é estimada.
+            {useSnapshotData
+              ? 'Patrimônio real registrado mês a mês vs total aportado.'
+              : 'Compara o aportado com o CDI. Snapshots mensais reais serão usados após 2 meses de uso.'}
           </p>
+        </div>
+      </div>
+
+      {/* Proventos + Rebalanceamento */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Proventos */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700">
+              <Coins className="h-4 w-4 text-amber-500" /> Proventos
+            </h2>
+            {dividends && (
+              <div className="text-right">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">DY carteira · YoC</p>
+                <p className="text-xs font-bold text-amber-600">{dividends.portfolioYield.toFixed(2)}% · {dividends.yieldOnCost.toFixed(2)}%</p>
+              </div>
+            )}
+          </div>
+          {!dividends || dividends.dividends.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Nenhum provento registrado. Clique em "Provento" no topo para adicionar.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="rounded-xl bg-amber-50 p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-600/70">Últimos 12 meses</p>
+                  <p className="text-base font-bold text-amber-700">{fmt(dividends.totalLast12m)}</p>
+                </div>
+                <div className="rounded-xl bg-gray-50 p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-400">Total recebido</p>
+                  <p className="text-base font-bold text-gray-700">{fmt(dividends.totalReceived)}</p>
+                </div>
+              </div>
+              {dividendChartData.some(d => d.valor > 0) && (
+                <ResponsiveContainer width="100%" height={120}>
+                  <LineChart data={dividendChartData}>
+                    <XAxis dataKey="month" tick={{ fontSize: 9 }} />
+                    <Tooltip formatter={(v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} />
+                    <Line type="monotone" dataKey="valor" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+              <ul className="mt-2 divide-y divide-gray-50 max-h-[140px] overflow-y-auto">
+                {dividends.dividends.slice(0, 20).map((d) => (
+                  <li key={d.id} className="flex items-center justify-between py-1.5 text-xs group">
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-700">{d.ticker}</span>
+                      <span className="rounded bg-gray-100 px-1 py-0.5 text-[9px] uppercase text-gray-400">{d.kind}</span>
+                      <span className="text-gray-400">{d.date.split('-').reverse().join('/')}</span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-amber-600">{fmt(d.amount)}</span>
+                      <button onClick={() => { if (confirm('Excluir provento?')) deleteDividendMutation.mutate(d.id) }}
+                        className="rounded p-1 text-gray-200 opacity-0 group-hover:opacity-100 hover:text-red-500 transition">
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+
+        {/* Rebalanceamento */}
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700">
+              <Target className="h-4 w-4 text-blue-500" /> Rebalanceamento
+            </h2>
+            <button onClick={() => setTargetsModalOpen(true)} className="text-xs font-medium text-blue-600 hover:underline">
+              Editar metas
+            </button>
+          </div>
+          {!rebalance || rebalance.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">
+              Defina metas de alocação para ver sugestões de aporte.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {rebalance.map((row) => {
+                const onTarget = Math.abs(row.diffPct) < 1
+                return (
+                  <div key={row.assetClass} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-gray-700">{ALL_CLASS_LABELS[row.assetClass] ?? row.assetClass}</span>
+                      <span className="text-gray-400">{row.currentPct.toFixed(1)}% / {row.targetPct.toFixed(0)}%</span>
+                    </div>
+                    {/* Barra dupla: atual vs alvo */}
+                    <div className="relative h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="absolute inset-y-0 left-0 rounded-full bg-blue-400" style={{ width: `${Math.min(row.currentPct, 100)}%` }} />
+                      <div className="absolute inset-y-0 w-0.5 bg-gray-700" style={{ left: `${Math.min(row.targetPct, 100)}%` }} title="Meta" />
+                    </div>
+                    <div className="flex justify-end text-[11px]">
+                      {onTarget ? (
+                        <span className="text-emerald-600 font-medium">no alvo</span>
+                      ) : row.suggestedAmount > 0 ? (
+                        <span className="text-blue-600">aportar {fmt(row.suggestedAmount)}</span>
+                      ) : (
+                        <span className="text-amber-600">reduzir {fmt(Math.abs(row.suggestedAmount))}</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -354,6 +534,8 @@ export default function InvestmentsPage() {
       <NewRvModal open={rvModalOpen} onClose={() => setRvModalOpen(false)} />
       <NewRfModal open={rfModalOpen} onClose={() => setRfModalOpen(false)} />
       <RvTransactionsModal position={txModalInvestment} onClose={() => setTxModalInvestment(null)} />
+      <DividendModal open={dividendModalOpen} onClose={() => setDividendModalOpen(false)} />
+      <TargetsModal open={targetsModalOpen} onClose={() => setTargetsModalOpen(false)} />
     </div>
   )
 }

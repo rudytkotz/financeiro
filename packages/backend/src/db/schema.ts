@@ -193,6 +193,67 @@ export const investmentTransactions = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// investment_dividends — proventos recebidos (dividendos, JCP, rendimentos FII)
+// ---------------------------------------------------------------------------
+export const investmentDividends = pgTable(
+  'investment_dividends',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    investmentId: uuid('investment_id').notNull().references(() => investments.id, { onDelete: 'cascade' }),
+    // 'dividendo' | 'jcp' | 'rendimento' (FII)
+    kind: varchar('kind', { length: 15 }).notNull().default('dividendo'),
+    // Valor total recebido em centavos
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    date: date('date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    investmentIdx: index('investment_dividends_investment_id_idx').on(table.investmentId),
+    userIdx: index('investment_dividends_user_id_idx').on(table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
+// portfolio_snapshots — fotos mensais do patrimônio (evolução real)
+// ---------------------------------------------------------------------------
+export const portfolioSnapshots = pgTable(
+  'portfolio_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    month: varchar('month', { length: 7 }).notNull(), // YYYY-MM
+    totalInvested: bigint('total_invested', { mode: 'number' }).notNull(),
+    totalCurrent: bigint('total_current', { mode: 'number' }).notNull(),
+    rendaVariavel: bigint('renda_variavel', { mode: 'number' }).notNull().default(0),
+    rendaFixa: bigint('renda_fixa', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    // Um snapshot por mês por usuário
+    monthUserUniqueIdx: uniqueIndex('portfolio_snapshots_month_user_idx').on(table.month, table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
+// allocation_targets — metas de alocação por classe (rebalanceamento)
+// ---------------------------------------------------------------------------
+export const allocationTargets = pgTable(
+  'allocation_targets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // 'acao' | 'fii' | 'etf' | 'bdr' | 'renda_fixa'
+    assetClass: varchar('asset_class', { length: 20 }).notNull(),
+    // % alvo * 100 (ex: 40.00% = 4000)
+    targetPct: integer('target_pct').notNull(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    classUserUniqueIdx: uniqueIndex('allocation_targets_class_user_idx').on(table.assetClass, table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
 // telegram_links (vinculo chat_id → user)
 // ---------------------------------------------------------------------------
 export const telegramLinks = pgTable('telegram_links', {
@@ -228,3 +289,12 @@ export type NewInvestment = typeof investments.$inferInsert
 
 export type InvestmentTransaction = typeof investmentTransactions.$inferSelect
 export type NewInvestmentTransaction = typeof investmentTransactions.$inferInsert
+
+export type InvestmentDividend = typeof investmentDividends.$inferSelect
+export type NewInvestmentDividend = typeof investmentDividends.$inferInsert
+
+export type PortfolioSnapshot = typeof portfolioSnapshots.$inferSelect
+export type NewPortfolioSnapshot = typeof portfolioSnapshots.$inferInsert
+
+export type AllocationTarget = typeof allocationTargets.$inferSelect
+export type NewAllocationTarget = typeof allocationTargets.$inferInsert

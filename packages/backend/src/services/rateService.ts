@@ -107,6 +107,47 @@ export async function getCdiAccumulatedFactor(startDate: string, endDate: string
   return estimate
 }
 
+// ---------------------------------------------------------------------------
+// IPCA (série 433 — IPCA mensal %)
+// ---------------------------------------------------------------------------
+let ipcaAnnualCache: CachedValue<number> | null = null
+
+/**
+ * Retorna o IPCA acumulado dos últimos 12 meses (% a.a.).
+ * Fallback para 4.5 se a API falhar.
+ */
+export async function getIpcaAccumulated12m(): Promise<number> {
+  const now = Date.now()
+  if (ipcaAnnualCache && now - ipcaAnnualCache.fetchedAt < CACHE_TTL_MS) {
+    return ipcaAnnualCache.value
+  }
+
+  try {
+    const resp = await fetch(`${BCB_BASE}/bcdata.sgs.433/dados/ultimos/12?formato=json`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (resp.ok) {
+      const data = await resp.json() as SgsPoint[]
+      // Compor os 12 meses: produto dos (1 + ipca_mensal/100) - 1
+      let factor = 1
+      for (const p of data) {
+        const monthly = parseFloat(p.valor)
+        if (!isNaN(monthly)) factor *= (1 + monthly / 100)
+      }
+      const annual = (factor - 1) * 100
+      if (annual > 0) {
+        ipcaAnnualCache = { value: annual, fetchedAt: now }
+        return annual
+      }
+    }
+  } catch {
+    // ignora
+  }
+
+  return ipcaAnnualCache?.value ?? 4.5
+}
+
 /**
  * Retorna uma série mensal do fator CDI acumulado desde startDate até hoje.
  * Útil para o gráfico de comparação patrimônio vs CDI.
