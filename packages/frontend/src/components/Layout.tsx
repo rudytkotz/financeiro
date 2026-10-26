@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -11,6 +12,8 @@ import {
   LogOut,
   Moon,
   Sun,
+  MoreHorizontal,
+  X,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAuth } from '../hooks/useAuth'
@@ -20,6 +23,7 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const { isDark, toggle } = useDarkMode()
   const navigate = useNavigate()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   const navItems = [
     { to: '/', label: 'Painel', icon: LayoutDashboard },
@@ -31,6 +35,10 @@ export default function Layout() {
     { to: '/dependents', label: 'Dependentes', icon: Users },
     ...(user?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
   ]
+
+  // No mobile, mostramos os 4 primeiros na barra; o resto vai no menu "Mais"
+  const primaryMobileItems = navItems.slice(0, 4)
+  const secondaryMobileItems = navItems.slice(4)
 
   const handleLogout = () => {
     logout()
@@ -86,26 +94,66 @@ export default function Layout() {
         </div>
       </main>
 
-      {/* Mobile bottom navigation */}
+      {/* Mobile bottom navigation — 4 principais + botão "Mais" */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-around border-t bg-card py-1.5 md:hidden safe-bottom">
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {primaryMobileItems.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === '/'}
             className={({ isActive }) => cn(
-              'flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium transition-colors',
+              'flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium transition-colors min-w-[56px]',
               isActive ? 'text-primary' : 'text-muted-foreground'
             )}>
             <Icon className="h-5 w-5" />
-            <span>{label}</span>
+            <span className="truncate max-w-[56px]">{label}</span>
           </NavLink>
         ))}
         <button
-          onClick={handleLogout}
-          className="flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium text-muted-foreground transition-colors hover:text-red-500"
+          onClick={() => setMoreOpen(true)}
+          className="flex flex-col items-center gap-0.5 px-1 py-1 text-[9px] font-medium text-muted-foreground transition-colors min-w-[56px]"
         >
-          <LogOut className="h-5 w-5" />
-          <span>Sair</span>
+          <MoreHorizontal className="h-5 w-5" />
+          <span>Mais</span>
         </button>
       </nav>
+
+      {/* Mobile "Mais" drawer */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-30 md:hidden" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMoreOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl bg-card p-4 pb-6 shadow-2xl animate-in slide-in-from-bottom duration-200 safe-bottom">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-foreground">Menu</span>
+              <button onClick={() => setMoreOpen(false)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {secondaryMobileItems.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to} onClick={() => setMoreOpen(false)}
+                  className={({ isActive }) => cn(
+                    'flex flex-col items-center gap-1.5 rounded-xl border p-3 text-[11px] font-medium transition',
+                    isActive ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'
+                  )}>
+                  <Icon className="h-5 w-5" />
+                  <span className="text-center leading-tight">{label}</span>
+                </NavLink>
+              ))}
+            </div>
+            {/* Dark mode + logout */}
+            <div className="mt-3 flex gap-2">
+              <button onClick={() => { toggle(); }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted transition">
+                {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {isDark ? 'Modo claro' : 'Modo escuro'}
+              </button>
+              <button onClick={() => { setMoreOpen(false); handleLogout() }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-red-200 px-3 py-2.5 text-xs font-medium text-red-500 hover:bg-red-50 transition">
+                <LogOut className="h-4 w-4" />
+                Sair
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
