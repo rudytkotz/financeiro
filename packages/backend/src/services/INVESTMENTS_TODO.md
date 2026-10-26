@@ -34,8 +34,11 @@
 - [ ] Alertas de preço (ativo atingiu X)
 
 ## Observações técnicas
-- A brapi.dev free tier retorna cotação EOD (fim do dia), não tempo real.
-- O token está em `BRAPI_TOKEN` no `.env`.
+- **Fonte de cotações: Yahoo Finance** (gratuito, sem token). Tickers da B3 usam
+  sufixo `.SA` (ex: PETR4.SA, HGLG11.SA). Cobre ações, FIIs, ETFs e BDRs.
+- Fallback: brapi.dev (usado só se o Yahoo falhar E `BRAPI_TOKEN` estiver setado).
+- Ambas retornam cotação com atraso (~15 min), não tempo real.
+- O endpoint do Yahoo é não-oficial; se ele mudar/bloquear, o fallback brapi cobre.
 - Preço médio: compras recalculam PM ponderado (inclui taxas no custo); vendas
   reduzem quantidade mantendo o PM. Não trata eventos corporativos ainda.
 - Valores monetários em centavos (bigint). Taxas de RF em `% * 100`.
