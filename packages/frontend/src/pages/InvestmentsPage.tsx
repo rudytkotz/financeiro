@@ -14,7 +14,7 @@ import {
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
-  LineChart as LineIcon, Wallet, Percent,
+  LineChart as LineIcon, Wallet, Percent, ChevronDown,
 } from 'lucide-react'
 import NewRvModal from '@/components/investments/NewRvModal'
 import NewRfModal from '@/components/investments/NewRfModal'
@@ -67,6 +67,17 @@ export default function InvestmentsPage() {
   const [tab, setTab] = useState<Tab>('rv')
   const [rvFilter, setRvFilter] = useState<RvFilter>('todos')
   const [allocationView, setAllocationView] = useState<AllocationView>('classe')
+  // Classes recolhidas (Set de classKey). Começam todas expandidas.
+  const [collapsedClasses, setCollapsedClasses] = useState<Set<string>>(new Set())
+
+  const toggleClass = (classKey: string) => {
+    setCollapsedClasses((prev) => {
+      const next = new Set(prev)
+      if (next.has(classKey)) next.delete(classKey)
+      else next.add(classKey)
+      return next
+    })
+  }
 
   const cdiAnnual = rfPositions?.[0]?.cdiAnnual ?? null
 
@@ -301,19 +312,35 @@ export default function InvestmentsPage() {
           ) : rvByClass.length === 0 ? (
             <EmptyState text="Nenhum ativo nesta categoria." />
           ) : (
-            rvByClass.map((group) => (
-              <div key={group.classKey} className="space-y-2">
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-400 px-1">
-                  {group.label}
-                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">{group.positions.length}</span>
-                  <span className="ml-auto font-semibold text-gray-600 normal-case tracking-normal">
-                    {fmt(group.positions.reduce((s, p) => s + (p.currentvalueTotal ?? p.investedTotal), 0))}
-                  </span>
-                </h3>
-                <RvTable positions={group.positions} loading={false} onOperate={setTxModalInvestment}
-                  onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
-              </div>
-            ))
+            rvByClass.map((group) => {
+              const collapsed = collapsedClasses.has(group.classKey)
+              const groupTotal = group.positions.reduce((s, p) => s + (p.currentvalueTotal ?? p.investedTotal), 0)
+              const groupResult = group.positions.reduce((s, p) => s + (p.profitLoss ?? 0), 0)
+              return (
+                <div key={group.classKey} className="space-y-2">
+                  <button
+                    onClick={() => toggleClass(group.classKey)}
+                    className="flex w-full items-center gap-2 rounded-xl border border-gray-100 bg-gray-50/60 px-3 py-2.5 text-left transition hover:bg-gray-100/60"
+                  >
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                    <span className="text-xs font-bold uppercase tracking-wider text-gray-600">{group.label}</span>
+                    <span className="rounded-full bg-gray-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">{group.positions.length}</span>
+                    <span className="ml-auto flex items-center gap-2">
+                      {groupResult !== 0 && (
+                        <span className={`text-[11px] font-medium ${groupResult >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {groupResult >= 0 ? '+' : ''}{fmtShort(groupResult)}
+                        </span>
+                      )}
+                      <span className="text-sm font-semibold text-gray-700">{fmt(groupTotal)}</span>
+                    </span>
+                  </button>
+                  {!collapsed && (
+                    <RvTable positions={group.positions} loading={false} onOperate={setTxModalInvestment}
+                      onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}
