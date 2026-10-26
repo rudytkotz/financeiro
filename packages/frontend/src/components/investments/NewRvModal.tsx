@@ -20,6 +20,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
   const createMutation = useCreateRvInvestment()
   const [ticker, setTicker] = useState('')
   const [name, setName] = useState('')
+  const [nameEditedManually, setNameEditedManually] = useState(false)
   const [assetClass, setAssetClass] = useState<RvAssetClass>('acao')
   const [quantity, setQuantity] = useState('')
   const [price, setPrice] = useState('')
@@ -27,16 +28,31 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [error, setError] = useState('')
 
-  const { data: quote, isFetching: loadingQuote } = useQuotePreview(ticker.toUpperCase())
+  const { data: quote, isFetching: loadingQuote, isError: quoteError } = useQuotePreview(ticker.toUpperCase())
 
-  // Auto-preencher nome com o da cotação se vazio
+  // Auto-preencher o nome com o da cotação, a menos que o usuário tenha editado manualmente
   useEffect(() => {
-    if (quote?.name && !name) setName(quote.name)
-  }, [quote]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (quote?.name && !nameEditedManually) {
+      setName(quote.name)
+    }
+  }, [quote, nameEditedManually])
+
+  // Inferir o tipo de ativo pelo padrão do ticker (FIIs terminam em 11)
+  useEffect(() => {
+    const t = ticker.trim().toUpperCase()
+    if (/\d{2}$/.test(t) && t.endsWith('11')) {
+      setAssetClass('fii')
+    } else if (/34$/.test(t)) {
+      setAssetClass('bdr')
+    } else if (/[3-8]$/.test(t)) {
+      setAssetClass('acao')
+    }
+  }, [ticker])
 
   useEffect(() => {
     if (open) {
-      setTicker(''); setName(''); setAssetClass('acao'); setQuantity(''); setPrice(''); setFees(''); setError('')
+      setTicker(''); setName(''); setNameEditedManually(false); setAssetClass('acao')
+      setQuantity(''); setPrice(''); setFees(''); setError('')
       setDate(new Date().toISOString().slice(0, 10))
     }
   }, [open])
@@ -88,28 +104,40 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
               placeholder="Ex: PETR4, HGLG11"
+              autoFocus
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
-            {loadingQuote && <p className="mt-1 text-xs text-gray-400">Buscando cotação...</p>}
+            {loadingQuote && <p className="mt-1 text-xs text-gray-400">Buscando ativo...</p>}
             {quote && (
               <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs">
-                <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                <span className="text-gray-600">{quote.name ?? quote.ticker}</span>
-                <span className="ml-auto font-bold text-emerald-700">
+                <TrendingUp className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                <span className="text-gray-600 truncate">{quote.name ?? quote.ticker}</span>
+                <span className="ml-auto font-bold text-emerald-700 flex-shrink-0">
                   {quote.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
               </div>
             )}
+            {quoteError && ticker.trim().length >= 4 && !loadingQuote && (
+              <p className="mt-1 text-xs text-amber-600">Ticker não encontrado. Confira o código ou preencha o nome manualmente.</p>
+            )}
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Nome</label>
+            <label className="mb-1 flex items-center gap-2 text-sm font-medium">
+              Nome
+              {name && !nameEditedManually && quote && (
+                <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-600">
+                  automático
+                </span>
+              )}
+            </label>
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Petrobras PN"
+              onChange={(e) => { setName(e.target.value); setNameEditedManually(true) }}
+              placeholder="Preenchido automaticamente ao digitar o ticker"
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
+            <p className="mt-1 text-[11px] text-gray-400">Só precisa do ticker — o nome é buscado automaticamente.</p>
           </div>
 
           <div>
