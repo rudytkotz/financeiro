@@ -187,6 +187,133 @@ export async function deleteInvestment(id: string, userId: string): Promise<void
 }
 
 // ---------------------------------------------------------------------------
+// Edição de investimentos
+// ---------------------------------------------------------------------------
+
+export interface UpdateRvData {
+  ticker?: string
+  name?: string
+  assetClass?: string
+}
+
+export async function updateRvInvestment(id: string, data: UpdateRvData, userId: string): Promise<Investment> {
+  const [inv] = await db
+    .select()
+    .from(investments)
+    .where(and(eq(investments.id, id), eq(investments.userId, userId)))
+    .limit(1)
+  if (!inv) throw makeError(404, 'NOT_FOUND', 'Investimento não encontrado.')
+  if (inv.type !== 'renda_variavel') throw makeError(422, 'INVALID_TYPE', 'Tipo inválido para esta edição.')
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() }
+  if (data.ticker !== undefined) {
+    const t = data.ticker.trim().toUpperCase()
+    if (!t) throw makeError(422, 'VALIDATION_ERROR', 'O ticker é obrigatório.')
+    updates.ticker = t
+  }
+  if (data.name !== undefined) {
+    if (!data.name.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome é obrigatório.')
+    updates.name = data.name.trim()
+  }
+  if (data.assetClass !== undefined) updates.assetClass = data.assetClass
+
+  const [updated] = await db
+    .update(investments)
+    .set(updates)
+    .where(and(eq(investments.id, id), eq(investments.userId, userId)))
+    .returning()
+  return updated
+}
+
+export interface UpdateRfData {
+  name?: string
+  assetClass?: string
+  investedAmount?: number
+  applicationDate?: string
+  maturityDate?: string | null
+  rateType?: string
+  rateValue?: number
+}
+
+export async function updateRfInvestment(id: string, data: UpdateRfData, userId: string): Promise<Investment> {
+  const [inv] = await db
+    .select()
+    .from(investments)
+    .where(and(eq(investments.id, id), eq(investments.userId, userId)))
+    .limit(1)
+  if (!inv) throw makeError(404, 'NOT_FOUND', 'Investimento não encontrado.')
+  if (inv.type !== 'renda_fixa') throw makeError(422, 'INVALID_TYPE', 'Tipo inválido para esta edição.')
+
+  const updates: Record<string, unknown> = { updatedAt: new Date() }
+  if (data.name !== undefined) {
+    if (!data.name.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome é obrigatório.')
+    updates.name = data.name.trim()
+  }
+  if (data.assetClass !== undefined) updates.assetClass = data.assetClass
+  if (data.investedAmount !== undefined) {
+    if (!data.investedAmount || data.investedAmount <= 0) throw makeError(422, 'VALIDATION_ERROR', 'O valor aplicado deve ser maior que zero.')
+    updates.investedAmount = data.investedAmount
+  }
+  if (data.applicationDate !== undefined) {
+    if (!data.applicationDate) throw makeError(422, 'VALIDATION_ERROR', 'A data de aplicação é obrigatória.')
+    updates.applicationDate = data.applicationDate
+  }
+  if (data.maturityDate !== undefined) updates.maturityDate = data.maturityDate || null
+  if (data.rateType !== undefined) updates.rateType = data.rateType
+  if (data.rateValue !== undefined) updates.rateValue = data.rateValue
+
+  const [updated] = await db
+    .update(investments)
+    .set(updates)
+    .where(and(eq(investments.id, id), eq(investments.userId, userId)))
+    .returning()
+  return updated
+}
+
+export interface UpdateTxData {
+  operation?: 'compra' | 'venda'
+  quantity?: number
+  unitPrice?: number
+  fees?: number
+  date?: string
+}
+
+export async function updateTransaction(txId: string, data: UpdateTxData, userId: string): Promise<InvestmentTransaction> {
+  const [tx] = await db
+    .select()
+    .from(investmentTransactions)
+    .where(and(eq(investmentTransactions.id, txId), eq(investmentTransactions.userId, userId)))
+    .limit(1)
+  if (!tx) throw makeError(404, 'NOT_FOUND', 'Operação não encontrada.')
+
+  const updates: Record<string, unknown> = {}
+  if (data.operation !== undefined) {
+    if (data.operation !== 'compra' && data.operation !== 'venda') throw makeError(422, 'VALIDATION_ERROR', 'Operação inválida.')
+    updates.operation = data.operation
+  }
+  if (data.quantity !== undefined) {
+    if (!data.quantity || data.quantity <= 0) throw makeError(422, 'VALIDATION_ERROR', 'A quantidade deve ser maior que zero.')
+    updates.quantity = data.quantity
+  }
+  if (data.unitPrice !== undefined) {
+    if (!data.unitPrice || data.unitPrice <= 0) throw makeError(422, 'VALIDATION_ERROR', 'O preço unitário deve ser maior que zero.')
+    updates.unitPrice = data.unitPrice
+  }
+  if (data.fees !== undefined) updates.fees = data.fees
+  if (data.date !== undefined) {
+    if (!data.date) throw makeError(422, 'VALIDATION_ERROR', 'A data é obrigatória.')
+    updates.date = data.date
+  }
+
+  const [updated] = await db
+    .update(investmentTransactions)
+    .set(updates)
+    .where(and(eq(investmentTransactions.id, txId), eq(investmentTransactions.userId, userId)))
+    .returning()
+  return updated
+}
+
+// ---------------------------------------------------------------------------
 // Operações (compra/venda)
 // ---------------------------------------------------------------------------
 

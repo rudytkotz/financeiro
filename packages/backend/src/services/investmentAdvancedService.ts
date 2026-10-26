@@ -58,6 +58,39 @@ export async function deleteDividend(id: string, userId: string): Promise<void> 
   await db.delete(investmentDividends).where(and(eq(investmentDividends.id, id), eq(investmentDividends.userId, userId)))
 }
 
+export interface UpdateDividendData {
+  kind?: 'dividendo' | 'jcp' | 'rendimento'
+  amount?: number
+  date?: string
+}
+
+export async function updateDividend(id: string, data: UpdateDividendData, userId: string): Promise<InvestmentDividend> {
+  const [div] = await db
+    .select()
+    .from(investmentDividends)
+    .where(and(eq(investmentDividends.id, id), eq(investmentDividends.userId, userId)))
+    .limit(1)
+  if (!div) throw makeError(404, 'NOT_FOUND', 'Provento não encontrado.')
+
+  const updates: Record<string, unknown> = {}
+  if (data.kind !== undefined) updates.kind = data.kind
+  if (data.amount !== undefined) {
+    if (!data.amount || data.amount <= 0) throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser maior que zero.')
+    updates.amount = data.amount
+  }
+  if (data.date !== undefined) {
+    if (!data.date) throw makeError(422, 'VALIDATION_ERROR', 'A data é obrigatória.')
+    updates.date = data.date
+  }
+
+  const [updated] = await db
+    .update(investmentDividends)
+    .set(updates)
+    .where(and(eq(investmentDividends.id, id), eq(investmentDividends.userId, userId)))
+    .returning()
+  return updated
+}
+
 export interface DividendSummary {
   dividends: Array<InvestmentDividend & { investmentName: string; ticker: string | null }>
   totalReceived: number           // centavos (todos)

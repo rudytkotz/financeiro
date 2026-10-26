@@ -19,14 +19,16 @@ import {
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
-  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle, FileText,
+  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle, FileText, Pencil,
 } from 'lucide-react'
 import NewRvModal from '@/components/investments/NewRvModal'
 import NewRfModal from '@/components/investments/NewRfModal'
+import EditRvModal from '@/components/investments/EditRvModal'
 import RvTransactionsModal from '@/components/investments/RvTransactionsModal'
 import DividendModal from '@/components/investments/DividendModal'
 import TargetsModal from '@/components/investments/TargetsModal'
 import TaxReportModal from '@/components/investments/TaxReportModal'
+import type { Investment } from '@financeiro/shared'
 
 function fmt(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -83,6 +85,8 @@ export default function InvestmentsPage() {
   const [targetsModalOpen, setTargetsModalOpen] = useState(false)
   const [taxModalOpen, setTaxModalOpen] = useState(false)
   const [txModalInvestment, setTxModalInvestment] = useState<RvPosition | null>(null)
+  const [editRvInvestment, setEditRvInvestment] = useState<Investment | null>(null)
+  const [editRfInvestment, setEditRfInvestment] = useState<Investment | null>(null)
   const [tab, setTab] = useState<Tab>('rv')
   const [rvFilter, setRvFilter] = useState<RvFilter>('todos')
   const [allocationView, setAllocationView] = useState<AllocationView>('classe')
@@ -526,6 +530,7 @@ export default function InvestmentsPage() {
                   </button>
                   {!collapsed && (
                     <RvTable positions={group.positions} loading={false} onOperate={setTxModalInvestment}
+                      onEdit={setEditRvInvestment}
                       onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
                   )}
                 </div>
@@ -537,6 +542,7 @@ export default function InvestmentsPage() {
 
       {tab === 'rf' && (
         <RfTable positions={rfPositions ?? []} loading={loadingRf}
+          onEdit={setEditRfInvestment}
           onDelete={(id, name) => { if (confirm(`Excluir ${name}?`)) deleteMutation.mutate(id) }} />
       )}
 
@@ -547,6 +553,8 @@ export default function InvestmentsPage() {
       <DividendModal open={dividendModalOpen} onClose={() => setDividendModalOpen(false)} />
       <TargetsModal open={targetsModalOpen} onClose={() => setTargetsModalOpen(false)} />
       <TaxReportModal open={taxModalOpen} onClose={() => setTaxModalOpen(false)} />
+      <EditRvModal investment={editRvInvestment} onClose={() => setEditRvInvestment(null)} />
+      <NewRfModal open={!!editRfInvestment} onClose={() => setEditRfInvestment(null)} editing={editRfInvestment} />
     </div>
   )
 }
@@ -593,9 +601,9 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   )
 }
 
-function RvTable({ positions, loading, onOperate, onDelete }: {
+function RvTable({ positions, loading, onOperate, onEdit, onDelete }: {
   positions: RvPosition[]; loading: boolean
-  onOperate: (p: RvPosition) => void; onDelete: (id: string, ticker: string) => void
+  onOperate: (p: RvPosition) => void; onEdit: (inv: Investment) => void; onDelete: (id: string, ticker: string) => void
 }) {
   if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-[3px] border-emerald-200 border-t-emerald-500" /></div>
   if (positions.length === 0) return <EmptyState text='Nenhuma posição de renda variável. Clique em "Renda variável" para adicionar.' />
@@ -641,6 +649,10 @@ function RvTable({ positions, loading, onOperate, onDelete }: {
                 <div className="flex items-center justify-end gap-1">
                   <button onClick={() => onOperate(pos)}
                     className="rounded-lg px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 transition">Operar</button>
+                  <button onClick={() => onEdit(pos.investment)} title="Editar ativo"
+                    className="rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600 transition opacity-0 group-hover:opacity-100">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                   <button onClick={() => onDelete(pos.investment.id, pos.investment.ticker ?? '')}
                     className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
                     <Trash2 className="h-3.5 w-3.5" />
@@ -655,9 +667,9 @@ function RvTable({ positions, loading, onOperate, onDelete }: {
   )
 }
 
-function RfTable({ positions, loading, onDelete }: {
+function RfTable({ positions, loading, onEdit, onDelete }: {
   positions: Array<import('@financeiro/shared').RfPosition>; loading: boolean
-  onDelete: (id: string, name: string) => void
+  onEdit: (inv: Investment) => void; onDelete: (id: string, name: string) => void
 }) {
   if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-[3px] border-violet-200 border-t-violet-500" /></div>
   if (positions.length === 0) return <EmptyState text='Nenhum investimento de renda fixa. Clique em "Renda fixa" para adicionar.' />
@@ -700,10 +712,16 @@ function RfTable({ positions, loading, onDelete }: {
                   </div>
                 </td>
                 <td className="px-2 py-3 text-right">
-                  <button onClick={() => onDelete(inv.id, inv.name)}
-                    className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <button onClick={() => onEdit(inv)} title="Editar"
+                      className="rounded-lg p-1.5 text-gray-300 hover:bg-gray-100 hover:text-gray-600 transition opacity-0 group-hover:opacity-100">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => onDelete(inv.id, inv.name)}
+                      className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition opacity-0 group-hover:opacity-100">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             )

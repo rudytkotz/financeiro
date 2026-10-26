@@ -126,6 +126,50 @@ export function useCreateRfInvestment() {
   })
 }
 
+export function useUpdateRvInvestment() {
+  const qc = useQueryClient()
+  return useMutation<Investment, Error, { id: string; payload: { ticker?: string; name?: string; assetClass?: string } }>({
+    mutationFn: async ({ id, payload }) => {
+      const { data } = await api.put(`/api/investments/rv/${id}`, payload)
+      return data
+    },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+export function useUpdateRfInvestment() {
+  const qc = useQueryClient()
+  return useMutation<Investment, Error, { id: string; payload: Partial<CreateInvestmentRfPayload> }>({
+    mutationFn: async ({ id, payload }) => {
+      const { data } = await api.put(`/api/investments/rf/${id}`, payload)
+      return data
+    },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+export function useUpdateInvestmentTransaction() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, { txId: string; payload: Partial<CreateInvestmentTransactionPayload> }>({
+    mutationFn: async ({ txId, payload }) => {
+      const { data } = await api.put(`/api/investments/transactions/${txId}`, payload)
+      return data
+    },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
+export function useUpdateDividend() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, { id: string; payload: Partial<CreateDividendPayload> }>({
+    mutationFn: async ({ id, payload }) => {
+      const { data } = await api.put(`/api/investments/dividends/${id}`, payload)
+      return data
+    },
+    onSuccess: () => invalidateAll(qc),
+  })
+}
+
 export function useAddInvestmentTransaction() {
   const qc = useQueryClient()
   return useMutation<unknown, Error, { investmentId: string; payload: CreateInvestmentTransactionPayload }>({

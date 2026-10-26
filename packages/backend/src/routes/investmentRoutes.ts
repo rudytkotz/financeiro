@@ -3,8 +3,11 @@ import {
   listInvestments,
   createRvInvestment,
   createRfInvestment,
+  updateRvInvestment,
+  updateRfInvestment,
   deleteInvestment,
   addTransaction,
+  updateTransaction,
   deleteTransaction,
   getRvPositions,
   getRfPositions,
@@ -15,10 +18,14 @@ import {
   type CreateRvData,
   type CreateRfData,
   type CreateTxData,
+  type UpdateRvData,
+  type UpdateRfData,
+  type UpdateTxData,
 } from '../services/investmentService.js'
 import { getQuote, getDividendHistory } from '../services/quoteService.js'
 import {
   addDividend,
+  updateDividend,
   deleteDividend,
   getDividendSummary,
   getMaturityAlerts,
@@ -29,6 +36,7 @@ import {
   getRebalance,
   getTaxReport,
   type CreateDividendData,
+  type UpdateDividendData,
   type SetTargetData,
 } from '../services/investmentAdvancedService.js'
 
@@ -87,6 +95,17 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
     try {
       const div = await addDividend(request.body as CreateDividendData, getUserId(request))
       return reply.status(201).send(div)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  app.put('/api/investments/dividends/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const div = await updateDividend(id, request.body as UpdateDividendData, getUserId(request))
+      return reply.send(div)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
       throw err
@@ -185,12 +204,48 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // Editar renda variável
+  app.put('/api/investments/rv/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const inv = await updateRvInvestment(id, request.body as UpdateRvData, getUserId(request))
+      return reply.send(inv)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  // Editar renda fixa
+  app.put('/api/investments/rf/:id', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    try {
+      const inv = await updateRfInvestment(id, request.body as UpdateRfData, getUserId(request))
+      return reply.send(inv)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
   // Adicionar operação (compra/venda) a um investimento RV
   app.post('/api/investments/:id/transactions', async (request, reply) => {
     const { id } = request.params as { id: string }
     try {
       const tx = await addTransaction(id, request.body as CreateTxData, getUserId(request))
       return reply.status(201).send(tx)
+    } catch (err) {
+      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
+      throw err
+    }
+  })
+
+  // Editar operação
+  app.put('/api/investments/transactions/:txId', async (request, reply) => {
+    const { txId } = request.params as { txId: string }
+    try {
+      const tx = await updateTransaction(txId, request.body as UpdateTxData, getUserId(request))
+      return reply.send(tx)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
       throw err

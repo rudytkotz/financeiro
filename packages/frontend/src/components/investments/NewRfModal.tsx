@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useCreateRfInvestment } from '@/hooks/useInvestments'
-import type { RfAssetClass, RateType } from '@financeiro/shared'
+import { useCreateRfInvestment, useUpdateRfInvestment } from '@/hooks/useInvestments'
+import type { RfAssetClass, RateType, Investment } from '@financeiro/shared'
 import { X } from 'lucide-react'
 
 const ASSET_CLASSES: Array<{ value: RfAssetClass; label: string }> = [
@@ -24,8 +24,10 @@ function brlToCents(value: string): number | null {
   return Math.round(n * 100)
 }
 
-export default function NewRfModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function NewRfModal({ open, onClose, editing }: { open: boolean; onClose: () => void; editing?: Investment | null }) {
   const createMutation = useCreateRfInvestment()
+  const updateMutation = useUpdateRfInvestment()
+  const isEdit = !!editing
   const [name, setName] = useState('')
   const [assetClass, setAssetClass] = useState<RfAssetClass>('cdb')
   const [amount, setAmount] = useState('')
@@ -37,10 +39,21 @@ export default function NewRfModal({ open, onClose }: { open: boolean; onClose: 
 
   useEffect(() => {
     if (open) {
-      setName(''); setAssetClass('cdb'); setAmount(''); setMaturityDate(''); setRateType('pos_cdi'); setRateValue(''); setError('')
-      setApplicationDate(new Date().toISOString().slice(0, 10))
+      if (editing) {
+        setName(editing.name)
+        setAssetClass((editing.assetClass as RfAssetClass) ?? 'cdb')
+        setAmount(((editing.investedAmount ?? 0) / 100).toFixed(2).replace('.', ','))
+        setApplicationDate(editing.applicationDate ?? new Date().toISOString().slice(0, 10))
+        setMaturityDate(editing.maturityDate ?? '')
+        setRateType((editing.rateType as RateType) ?? 'pos_cdi')
+        setRateValue(editing.rateValue !== null ? (editing.rateValue / 100).toString() : '')
+      } else {
+        setName(''); setAssetClass('cdb'); setAmount(''); setMaturityDate(''); setRateType('pos_cdi'); setRateValue('')
+        setApplicationDate(new Date().toISOString().slice(0, 10))
+      }
+      setError('')
     }
-  }, [open])
+  }, [open, editing])
 
   if (!open) return null
 
@@ -53,19 +66,25 @@ export default function NewRfModal({ open, onClose }: { open: boolean; onClose: 
     const rate = Number(rateValue.replace(',', '.'))
     if (isNaN(rate) || rate <= 0) { setError('Taxa inválida.'); return }
 
+    const payload = {
+      name: name.trim(),
+      assetClass,
+      investedAmount: cents,
+      applicationDate,
+      maturityDate: maturityDate || null,
+      rateType,
+      rateValue: Math.round(rate * 100), // % → % * 100
+    }
+
     try {
-      await createMutation.mutateAsync({
-        name: name.trim(),
-        assetClass,
-        investedAmount: cents,
-        applicationDate,
-        maturityDate: maturityDate || null,
-        rateType,
-        rateValue: Math.round(rate * 100), // % → % * 100
-      })
+      if (isEdit && editing) {
+        await updateMutation.mutateAsync({ id: editing.id, payload })
+      } else {
+        await createMutation.mutateAsync(payload)
+      }
       onClose()
     } catch {
-      setError('Erro ao cadastrar.')
+      setError(isEdit ? 'Erro ao atualizar.' : 'Erro ao cadastrar.')
     }
   }
 
@@ -75,7 +94,7 @@ export default function NewRfModal({ open, onClose }: { open: boolean; onClose: 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Nova renda fixa</h2>
+          <h2 className="text-lg font-semibold">{isEdit ? 'Editar renda fixa' : 'Nova renda fixa'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
 
@@ -140,8 +159,8 @@ export default function NewRfModal({ open, onClose }: { open: boolean; onClose: 
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50">Cancelar</button>
-            <button type="submit" disabled={createMutation.isPending} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
-              {createMutation.isPending ? 'Salvando...' : 'Adicionar'}
+            <button type="submit" disabled={createMutation.isPending || updateMutation.isPending} className="rounded-xl bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50">
+              {(createMutation.isPending || updateMutation.isPending) ? 'Salvando...' : isEdit ? 'Salvar' : 'Adicionar'}
             </button>
           </div>
         </form>
