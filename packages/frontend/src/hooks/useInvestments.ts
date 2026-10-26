@@ -13,6 +13,7 @@ import type {
   PortfolioSnapshot,
   AllocationTarget,
   RebalanceRow,
+  TaxReport,
   CreateDividendPayload,
   SetTargetPayload,
   CreateInvestmentRvPayload,
@@ -241,5 +242,18 @@ export function useSetTargets() {
       return data
     },
     onSuccess: () => invalidateAll(qc),
+  })
+}
+
+// ---- Relatório de IR ----
+
+export function useTaxReport(year: number) {
+  return useQuery<TaxReport>({
+    queryKey: ['investments', 'tax-report', year],
+    queryFn: async () => {
+      const { data } = await api.get(`/api/investments/tax-report?year=${year}`)
+      return data
+    },
+    staleTime: 10 * 60 * 1000,
   })
 }

@@ -292,3 +292,158 @@ export async function getRebalance(userId: string): Promise<RebalanceRow[]> {
     }
   })
 }
+
+// ---------------------------------------------------------------------------
+// Imposto de Renda — apuração de lucro/prejuízo em vendas
+// ---------------------------------------------------------------------------
+
+import { investmentTransactions } from '../db/schema.js'
+import type { InvestmentTransaction } from '../db/schema.js'
+
+export interface TaxMonthRow {
+  month: string            // YYYY-MM
+  assetClass: string       // 'acao' | 'fii' | 'etf' | 'bdr'
+  salesTotal: number       // centavos vendidos no mês
+  profit: number           // centavos de lucro (pode ser negativo)
+  exempt: boolean          // se isento (ações até 20k)
+  taxableProfit: number    // centavos sobre os quais incide imposto
+  taxRate: number          // alíquota % (15 ou 20)
+  taxDue: number           // centavos de imposto devido
+}
+
+export interface TaxReport {
+  year: number
+  rows: TaxMonthRow[]
+  totalTaxDue: number
+  totalProfit: number
+  totalExemptProfit: number
+}
+
+// Alíquota por classe de ativo
+function taxRateFor(assetClass: string): number {
+  if (assetClass === 'fii') return 20
+  return 15 // ações, etf, bdr, outros
+}
+
+/**
+ * Apura o IR sobre vendas de renda variável em um ano.
+ *
+ * Metodologia (regras B3 pessoa física, swing trade):
+ *  - Processa operações cronologicamente mantendo preço médio por ativo.
+ *  - Em cada venda, calcula lucro = (preço venda - PM) * qtd - taxas.
+ *  - Agrupa por mês + classe de ativo.
+ *  - Ações: isenção se total de vendas de AÇÕES no mês <= R$ 20.000.
+ *  - FII: 20% sobre lucro. ETF/BDR/ação tributada: 15%.
+ *  - Prejuízos reduzem o lucro do mesmo mês/classe (compensação simples).
+ *
+ * LIMITAÇÕES: não trata day trade, não compensa prejuízo entre meses,
+ * não considera eventos corporativos. É uma ESTIMATIVA de apoio.
+ */
+export async function getTaxReport(userId: string, year: number): Promise<TaxReport> {
+  // Buscar ativos RV do usuário + suas operações
+  const rvInvestments = await db
+    .select()
+    .from(investments)
+    .where(and(eq(investments.userId, userId), eq(investments.type, 'renda_variavel')))
+
+  const invById = new Map(rvInvestments.map((i) => [i.id, i]))
+
+  const allTxs = await db
+    .select()
+    .from(investmentTransactions)
+    .where(eq(investmentTransactions.userId, userId))
+
+  // Agrupar operações por investimento, ordenadas por data
+  const txsByInv = new Map<string, InvestmentTransaction[]>()
+  for (const tx of allTxs) {
+    if (!invById.has(tx.investmentId)) continue
+    const arr = txsByInv.get(tx.investmentId) ?? []
+    arr.push(tx)
+    txsByInv.set(tx.investmentId, arr)
+  }
+
+  // Resultado por mês+classe
+  interface Accum { salesTotal: number; profit: number }
+  const byMonthClass = new Map<string, Accum>() // key: 'YYYY-MM|classe'
+
+  for (const [invId, txs] of txsByInv) {
+    const inv = invById.get(invId)!
+    const assetClass = inv.assetClass ?? 'acao'
+    const ordered = [...txs].sort((a, b) => a.date.localeCompare(b.date))
+
+    let qty = 0
+    let totalCost = 0 // custo do estoque atual
+
+    for (const tx of ordered) {
+      if (tx.operation === 'compra') {
+        totalCost += tx.quantity * tx.unitPrice + tx.fees
+        qty += tx.quantity
+      } else {
+        // venda
+        if (qty <= 0) continue
+        const avgCost = totalCost / qty
+        const soldQty = Math.min(tx.quantity, qty)
+        const costOfSold = Math.round(avgCost * soldQty)
+        const saleValue = soldQty * tx.unitPrice - tx.fees
+        const profit = saleValue - costOfSold
+
+        // Só conta vendas do ano solicitado
+        if (tx.date.startsWith(String(year))) {
+          const month = tx.date.substring(0, 7)
+          const key = `${month}|${assetClass}`
+          const acc = byMonthClass.get(key) ?? { salesTotal: 0, profit: 0 }
+          acc.salesTotal += soldQty * tx.unitPrice // valor bruto de venda
+          acc.profit += profit
+          byMonthClass.set(key, acc)
+        }
+
+        totalCost -= costOfSold
+        qty -= soldQty
+        if (qty <= 0) { qty = 0; totalCost = 0 }
+      }
+    }
+  }
+
+  // Para a isenção de ações, precisamos do total de vendas de AÇÕES por mês
+  const stockSalesByMonth = new Map<string, number>()
+  for (const [key, acc] of byMonthClass) {
+    const [month, cls] = key.split('|')
+    if (cls === 'acao') {
+      stockSalesByMonth.set(month, (stockSalesByMonth.get(month) ?? 0) + acc.salesTotal)
+    }
+  }
+
+  const EXEMPTION_LIMIT = 2_000_000 // R$ 20.000 em centavos
+
+  const rows: TaxMonthRow[] = []
+  for (const [key, acc] of byMonthClass) {
+    const [month, assetClass] = key.split('|')
+    const taxRate = taxRateFor(assetClass)
+
+    // Isenção: só ações, e só se o total de vendas de ações no mês <= 20k
+    const isStockExempt = assetClass === 'acao' && (stockSalesByMonth.get(month) ?? 0) <= EXEMPTION_LIMIT
+
+    const exempt = isStockExempt
+    const taxableProfit = exempt || acc.profit <= 0 ? 0 : acc.profit
+    const taxDue = Math.round(taxableProfit * (taxRate / 100))
+
+    rows.push({
+      month,
+      assetClass,
+      salesTotal: acc.salesTotal,
+      profit: acc.profit,
+      exempt,
+      taxableProfit,
+      taxRate,
+      taxDue,
+    })
+  }
+
+  rows.sort((a, b) => a.month.localeCompare(b.month) || a.assetClass.localeCompare(b.assetClass))
+
+  const totalTaxDue = rows.reduce((s, r) => s + r.taxDue, 0)
+  const totalProfit = rows.reduce((s, r) => s + r.profit, 0)
+  const totalExemptProfit = rows.filter((r) => r.exempt).reduce((s, r) => s + Math.max(0, r.profit), 0)
+
+  return { year, rows, totalTaxDue, totalProfit, totalExemptProfit }
+}

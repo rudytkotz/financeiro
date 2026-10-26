@@ -29,8 +29,14 @@
 - [x] Snapshots mensais reais do patrimônio (gravados ao abrir a página; gráfico usa reais após 2 meses)
 - [x] Abas separadas para Renda Variável e Renda Fixa, com agrupamento por classe
 - [x] Rebalanceamento: metas de alocação por classe + sugestão de aportes
-- [ ] Benchmark vs IBOV além do CDI (endpoint ^BVSP via Yahoo — pendente)
-- [ ] Relatório de imposto de renda (apuração de lucro em vendas, DARF)
+- [x] Benchmark vs IBOV (série ^BVSP mensal via Yahoo) no gráfico de evolução
+- [x] Relatório de imposto de renda (apuração swing trade: isenção 20k ações, 15% ações/etf/bdr, 20% FII)
+
+## Limitações conhecidas do relatório de IR
+- Não trata day trade (apenas swing trade)
+- Não compensa prejuízo entre meses diferentes (só dentro do mesmo mês/classe)
+- Não considera eventos corporativos (desdobramento, bonificação)
+- É uma estimativa de apoio — não substitui apuração do contador
 
 ## v5 — automação e dados
 - [ ] Importar extrato de corretora (CSV da B3/corretoras)

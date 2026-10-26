@@ -183,3 +183,80 @@ export async function getCdiMonthlySeries(startDate: string): Promise<Array<{ mo
 
   return result
 }
+
+// ---------------------------------------------------------------------------
+// IBOVESPA — série histórica mensal via Yahoo Finance (^BVSP)
+// ---------------------------------------------------------------------------
+
+interface IbovCache {
+  startDate: string
+  series: Map<string, number> // 'YYYY-MM' -> fechamento do mês
+  fetchedAt: number
+}
+let ibovCache: IbovCache | null = null
+
+/**
+ * Retorna um Map 'YYYY-MM' -> valor de fechamento do IBOV naquele mês,
+ * desde startDate. Usado para calcular o fator de valorização do índice.
+ * Fonte: Yahoo Finance (^BVSP), dados mensais.
+ */
+async function getIbovMonthlyCloses(startDate: string): Promise<Map<string, number>> {
+  const now = Date.now()
+  if (ibovCache && ibovCache.startDate === startDate && now - ibovCache.fetchedAt < CACHE_TTL_MS) {
+    return ibovCache.series
+  }
+
+  const series = new Map<string, number>()
+  try {
+    const period1 = Math.floor(new Date(startDate + 'T00:00:00').getTime() / 1000)
+    const period2 = Math.floor(Date.now() / 1000)
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/%5EBVSP?period1=${period1}&period2=${period2}&interval=1mo`
+    const resp = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; FinanceiroApp/1.0)' },
+      signal: AbortSignal.timeout(12000),
+    })
+    if (resp.ok) {
+      const data = await resp.json() as {
+        chart?: { result?: Array<{
+          timestamp?: number[]
+          indicators?: { quote?: Array<{ close?: (number | null)[] }> }
+        }> }
+      }
+      const result = data.chart?.result?.[0]
+      const timestamps = result?.timestamp ?? []
+      const closes = result?.indicators?.quote?.[0]?.close ?? []
+      for (let i = 0; i < timestamps.length; i++) {
+        const close = closes[i]
+        if (typeof close === 'number') {
+          const d = new Date(timestamps[i] * 1000)
+          const month = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          series.set(month, close)
+        }
+      }
+      ibovCache = { startDate, series, fetchedAt: now }
+    }
+  } catch {
+    // ignora — retorna vazio, o gráfico simplesmente não mostra a linha do IBOV
+  }
+
+  return series
+}
+
+/**
+ * Retorna uma série mensal do FATOR de valorização do IBOV acumulado desde
+ * startDate. Ex: { month: '2025-03', factor: 1.08 } = +8% desde o início.
+ */
+export async function getIbovMonthlySeries(startDate: string): Promise<Array<{ month: string; factor: number }>> {
+  const closes = await getIbovMonthlyCloses(startDate)
+  if (closes.size === 0) return []
+
+  const months = [...closes.keys()].sort()
+  const baseMonth = months[0]
+  const baseClose = closes.get(baseMonth)
+  if (!baseClose || baseClose <= 0) return []
+
+  return months.map((month) => ({
+    month,
+    factor: (closes.get(month) ?? baseClose) / baseClose,
+  }))
+}

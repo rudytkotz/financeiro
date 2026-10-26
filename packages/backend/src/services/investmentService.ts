@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes } from './quoteService.js'
-import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m } from './rateService.js'
+import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m, getIbovMonthlySeries } from './rateService.js'
 
 export interface ServiceError {
   statusCode: number
@@ -467,6 +467,7 @@ export interface EvolutionPoint {
   month: string          // YYYY-MM
   invested: number       // centavos aportados acumulados até o mês
   cdiProjected: number   // centavos: valor que os aportes renderiam no CDI
+  ibovProjected: number | null  // centavos: valor que os aportes renderiam no IBOV
 }
 
 /**
@@ -503,27 +504,51 @@ export async function getEvolution(userId: string): Promise<EvolutionPoint[]> {
   contributions.sort((a, b) => a.date.localeCompare(b.date))
   const firstDate = contributions[0].date
 
-  // Série mensal do CDI desde o primeiro aporte
-  const cdiSeries = await getCdiMonthlySeries(firstDate)
+  // Séries mensais do CDI e do IBOV desde o primeiro aporte
+  const [cdiSeries, ibovSeries] = await Promise.all([
+    getCdiMonthlySeries(firstDate),
+    getIbovMonthlySeries(firstDate),
+  ])
   if (cdiSeries.length === 0) return []
+
+  // Mapa mês → fator IBOV acumulado (desde o início)
+  const ibovByMonth = new Map(ibovSeries.map((s) => [s.month, s.factor]))
+  const hasIbov = ibovSeries.length > 0
+
+  // Fator IBOV acumulado entre dois meses: fator(fim) / fator(início do aporte)
+  function ibovFactorBetween(contribMonth: string, targetMonth: string): number {
+    const fStart = ibovByMonth.get(contribMonth)
+    const fEnd = ibovByMonth.get(targetMonth)
+    if (!fStart || !fEnd || fStart <= 0) return 1
+    return fEnd / fStart
+  }
 
   const points: EvolutionPoint[] = []
 
   for (const { month } of cdiSeries) {
-    const monthEnd = `${month}-28` // aproximação suficiente para comparação mensal
+    const monthEnd = `${month}-28`
     let investedAccum = 0
     let cdiAccum = 0
+    let ibovAccum = 0
 
     for (const c of contributions) {
       if (c.date <= monthEnd) {
         investedAccum += c.amount
-        // Projeta este aporte pelo CDI da data do aporte até o fim do mês
         const factor = await getCdiAccumulatedFactor(c.date, monthEnd)
         cdiAccum += Math.round(c.amount * factor)
+        if (hasIbov) {
+          const ibovFactor = ibovFactorBetween(c.date.substring(0, 7), month)
+          ibovAccum += Math.round(c.amount * ibovFactor)
+        }
       }
     }
 
-    points.push({ month, invested: investedAccum, cdiProjected: cdiAccum })
+    points.push({
+      month,
+      invested: investedAccum,
+      cdiProjected: cdiAccum,
+      ibovProjected: hasIbov ? ibovAccum : null,
+    })
   }
 
   return points

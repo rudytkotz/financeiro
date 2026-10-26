@@ -19,13 +19,14 @@ import {
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
-  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle,
+  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle, FileText,
 } from 'lucide-react'
 import NewRvModal from '@/components/investments/NewRvModal'
 import NewRfModal from '@/components/investments/NewRfModal'
 import RvTransactionsModal from '@/components/investments/RvTransactionsModal'
 import DividendModal from '@/components/investments/DividendModal'
 import TargetsModal from '@/components/investments/TargetsModal'
+import TaxReportModal from '@/components/investments/TaxReportModal'
 
 function fmt(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -80,6 +81,7 @@ export default function InvestmentsPage() {
   const [rfModalOpen, setRfModalOpen] = useState(false)
   const [dividendModalOpen, setDividendModalOpen] = useState(false)
   const [targetsModalOpen, setTargetsModalOpen] = useState(false)
+  const [taxModalOpen, setTaxModalOpen] = useState(false)
   const [txModalInvestment, setTxModalInvestment] = useState<RvPosition | null>(null)
   const [tab, setTab] = useState<Tab>('rv')
   const [rvFilter, setRvFilter] = useState<RvFilter>('todos')
@@ -142,8 +144,11 @@ export default function InvestmentsPage() {
       month: monthLabel(p.month),
       Aportado: p.invested / 100,
       'CDI (100%)': p.cdiProjected / 100,
+      ...(p.ibovProjected !== null ? { IBOV: p.ibovProjected / 100 } : {}),
     }))
   }, [evolution, snapshots, useSnapshotData])
+
+  const hasIbovLine = useMemo(() => (evolution ?? []).some(p => p.ibovProjected !== null), [evolution])
 
   // Dados do gráfico de dividendos (12 meses)
   const dividendChartData = useMemo(() => {
@@ -201,6 +206,10 @@ export default function InvestmentsPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setTaxModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition active:scale-95">
+            <FileText className="h-4 w-4" /> IR
+          </button>
           <button onClick={() => setTargetsModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition active:scale-95">
             <Target className="h-4 w-4" /> Metas
@@ -342,6 +351,7 @@ export default function InvestmentsPage() {
                   <>
                     <Line type="monotone" dataKey="Aportado" stroke="#10b981" strokeWidth={2} dot={false} />
                     <Line type="monotone" dataKey="CDI (100%)" stroke="#3b82f6" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                    {hasIbovLine && <Line type="monotone" dataKey="IBOV" stroke="#f59e0b" strokeWidth={2} strokeDasharray="3 3" dot={false} />}
                   </>
                 )}
               </LineChart>
@@ -536,6 +546,7 @@ export default function InvestmentsPage() {
       <RvTransactionsModal position={txModalInvestment} onClose={() => setTxModalInvestment(null)} />
       <DividendModal open={dividendModalOpen} onClose={() => setDividendModalOpen(false)} />
       <TargetsModal open={targetsModalOpen} onClose={() => setTargetsModalOpen(false)} />
+      <TaxReportModal open={taxModalOpen} onClose={() => setTaxModalOpen(false)} />
     </div>
   )
 }

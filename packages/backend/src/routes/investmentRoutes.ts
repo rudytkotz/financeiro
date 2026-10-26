@@ -27,6 +27,7 @@ import {
   getAllocationTargets,
   setAllocationTargets,
   getRebalance,
+  getTaxReport,
   type CreateDividendData,
   type SetTargetData,
 } from '../services/investmentAdvancedService.js'
@@ -144,6 +145,14 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/investments/rebalance', async (request, reply) => {
     const rebalance = await getRebalance(getUserId(request))
     return reply.send(rebalance)
+  })
+
+  // ---- Relatório de Imposto de Renda ----
+  app.get('/api/investments/tax-report', async (request, reply) => {
+    const { year } = request.query as { year?: string }
+    const targetYear = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : new Date().getFullYear()
+    const report = await getTaxReport(getUserId(request), targetYear)
+    return reply.send(report)
   })
 
   // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar)

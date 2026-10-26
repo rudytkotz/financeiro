@@ -126,11 +126,12 @@ export interface AllocationSlice {
   category: 'renda_variavel' | 'renda_fixa'
 }
 
-// Evolução patrimônio vs CDI (gráfico de linha)
+// Evolução patrimônio vs CDI vs IBOV (gráfico de linha)
 export interface EvolutionPoint {
   month: string          // YYYY-MM
   invested: number       // centavos aportados acumulados
   cdiProjected: number   // centavos: valor projetado no CDI
+  ibovProjected: number | null  // centavos: valor projetado no IBOV
 }
 
 // Proventos
@@ -206,6 +207,26 @@ export interface RebalanceRow {
 export interface SetTargetPayload {
   assetClass: string
   targetPct: number      // % * 100
+}
+
+// Relatório de Imposto de Renda
+export interface TaxMonthRow {
+  month: string          // YYYY-MM
+  assetClass: string
+  salesTotal: number     // centavos
+  profit: number         // centavos
+  exempt: boolean
+  taxableProfit: number  // centavos
+  taxRate: number        // %
+  taxDue: number         // centavos
+}
+
+export interface TaxReport {
+  year: number
+  rows: TaxMonthRow[]
+  totalTaxDue: number
+  totalProfit: number
+  totalExemptProfit: number
 }
 
 // Payloads
