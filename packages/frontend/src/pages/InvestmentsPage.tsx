@@ -42,9 +42,16 @@ const RF_CLASS_LABELS: Record<string, string> = {
 const RATE_TYPE_LABELS: Record<string, string> = {
   pos_cdi: 'do CDI', prefixado: 'a.a. (pré)', ipca_mais: '+ IPCA',
 }
+// Rótulos e ordem de exibição das classes de renda variável
+const RV_CLASS_LABELS: Record<string, string> = {
+  acao: 'Ações', fii: 'Fundos Imobiliários', etf: 'ETFs', bdr: 'BDRs', outro: 'Outros',
+}
+const RV_CLASS_ORDER = ['acao', 'fii', 'etf', 'bdr', 'outro']
 const PIE_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1', '#14b8a6', '#ef4444', '#a855f7']
 
 type Tab = 'rv' | 'rf'
+type RvFilter = 'todos' | 'acao' | 'fii' | 'etf' | 'bdr'
+type AllocationView = 'ativo' | 'classe'
 
 export default function InvestmentsPage() {
   const { data: summary } = usePortfolioSummary()
@@ -58,10 +65,39 @@ export default function InvestmentsPage() {
   const [rfModalOpen, setRfModalOpen] = useState(false)
   const [txModalInvestment, setTxModalInvestment] = useState<RvPosition | null>(null)
   const [tab, setTab] = useState<Tab>('rv')
+  const [rvFilter, setRvFilter] = useState<RvFilter>('todos')
+  const [allocationView, setAllocationView] = useState<AllocationView>('classe')
 
   const cdiAnnual = rfPositions?.[0]?.cdiAnnual ?? null
 
   const activeRv = useMemo(() => (positions ?? []).filter(p => p.quantity > 0), [positions])
+
+  // Classes de RV presentes na carteira (para mostrar só os filtros relevantes)
+  const presentClasses = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of activeRv) set.add(p.investment.assetClass ?? 'outro')
+    return RV_CLASS_ORDER.filter(c => set.has(c))
+  }, [activeRv])
+
+  // RV filtrado
+  const filteredRv = useMemo(() => {
+    if (rvFilter === 'todos') return activeRv
+    return activeRv.filter(p => (p.investment.assetClass ?? 'outro') === rvFilter)
+  }, [activeRv, rvFilter])
+
+  // RV agrupado por classe (só classes com ativos)
+  const rvByClass = useMemo(() => {
+    const groups = new Map<string, RvPosition[]>()
+    for (const p of filteredRv) {
+      const cls = p.investment.assetClass ?? 'outro'
+      const arr = groups.get(cls) ?? []
+      arr.push(p)
+      groups.set(cls, arr)
+    }
+    return RV_CLASS_ORDER
+      .filter(c => groups.has(c))
+      .map(c => ({ classKey: c, label: RV_CLASS_LABELS[c] ?? c, positions: groups.get(c)! }))
+  }, [filteredRv])
 
   // Dados do gráfico de evolução
   const evolutionData = useMemo(() => {
@@ -74,8 +110,37 @@ export default function InvestmentsPage() {
 
   // Dados do gráfico de alocação
   const allocationData = useMemo(() => {
-    return (allocation ?? []).map(s => ({ name: s.label, value: s.value / 100, category: s.category }))
-  }, [allocation])
+    const slices = allocation ?? []
+    if (slices.length === 0) return []
+
+    if (allocationView === 'classe') {
+      // Agrupar por classe (renda variável x renda fixa, mais granular)
+      const byClass = new Map<string, number>()
+      for (const s of slices) {
+        const key = s.category === 'renda_fixa' ? 'Renda Fixa' : 'Renda Variável'
+        byClass.set(key, (byClass.get(key) ?? 0) + s.value)
+      }
+      return [...byClass.entries()]
+        .map(([name, value]) => ({ name, value: value / 100 }))
+        .sort((a, b) => b.value - a.value)
+    }
+
+    // Por ativo — se tiver muitos, mostra top 8 e agrupa o resto em "Outros"
+    const sorted = [...slices].sort((a, b) => b.value - a.value)
+    const TOP_N = 8
+    if (sorted.length <= TOP_N) {
+      return sorted.map(s => ({ name: s.label, value: s.value / 100 }))
+    }
+    const top = sorted.slice(0, TOP_N)
+    const rest = sorted.slice(TOP_N)
+    const restTotal = rest.reduce((sum, s) => sum + s.value, 0)
+    return [
+      ...top.map(s => ({ name: s.label, value: s.value / 100 })),
+      { name: `Outros (${rest.length})`, value: restTotal / 100 },
+    ]
+  }, [allocation, allocationView])
+
+  const allocationTotal = useMemo(() => allocationData.reduce((sum, s) => sum + s.value, 0), [allocationData])
 
   return (
     <div className="space-y-6">
@@ -132,21 +197,52 @@ export default function InvestmentsPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Alocação */}
         <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-4">
-            <PieIcon className="h-4 w-4 text-emerald-500" /> Alocação da carteira
-          </h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700">
+              <PieIcon className="h-4 w-4 text-emerald-500" /> Alocação da carteira
+            </h2>
+            {/* Toggle classe / ativo */}
+            <div className="flex rounded-lg border border-gray-200 p-0.5 text-[11px] font-medium">
+              <button onClick={() => setAllocationView('classe')}
+                className={`rounded-md px-2.5 py-1 transition ${allocationView === 'classe' ? 'bg-emerald-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                Por classe
+              </button>
+              <button onClick={() => setAllocationView('ativo')}
+                className={`rounded-md px-2.5 py-1 transition ${allocationView === 'ativo' ? 'bg-emerald-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+                Por ativo
+              </button>
+            </div>
+          </div>
           {allocationData.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-10">Sem dados para exibir.</p>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}
-                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
-                  {allocationData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                </Pie>
-                <Tooltip formatter={(v: number) => [`R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor']} />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <ResponsiveContainer width="100%" height={220} className="sm:!w-1/2">
+                <PieChart>
+                  <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                    innerRadius={50} outerRadius={85} paddingAngle={2}>
+                    {allocationData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => [`R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor']} />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Legenda customizada com valores e % */}
+              <div className="w-full sm:w-1/2 space-y-1.5 max-h-[220px] overflow-y-auto">
+                {allocationData.map((s, i) => {
+                  const pct = allocationTotal > 0 ? (s.value / allocationTotal) * 100 : 0
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                      <span className="text-gray-600 truncate flex-1">{s.name}</span>
+                      <span className="text-gray-400">{pct.toFixed(1)}%</span>
+                      <span className="font-semibold text-gray-700 tabular-nums">
+                        R$ {s.value.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           )}
         </div>
 
@@ -183,8 +279,43 @@ export default function InvestmentsPage() {
       </div>
 
       {tab === 'rv' && (
-        <RvTable positions={activeRv} loading={loadingRv} onOperate={setTxModalInvestment}
-          onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
+        <div className="space-y-4">
+          {/* Filtro por classe — só mostra os presentes */}
+          {activeRv.length > 0 && presentClasses.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              <FilterChip active={rvFilter === 'todos'} onClick={() => setRvFilter('todos')} label={`Todos (${activeRv.length})`} />
+              {presentClasses.map((cls) => {
+                const count = activeRv.filter(p => (p.investment.assetClass ?? 'outro') === cls).length
+                return (
+                  <FilterChip key={cls} active={rvFilter === cls} onClick={() => setRvFilter(cls as RvFilter)}
+                    label={`${RV_CLASS_LABELS[cls] ?? cls} (${count})`} />
+                )
+              })}
+            </div>
+          )}
+
+          {loadingRv ? (
+            <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-[3px] border-emerald-200 border-t-emerald-500" /></div>
+          ) : activeRv.length === 0 ? (
+            <EmptyState text='Nenhuma posição de renda variável. Clique em "Renda variável" para adicionar.' />
+          ) : rvByClass.length === 0 ? (
+            <EmptyState text="Nenhum ativo nesta categoria." />
+          ) : (
+            rvByClass.map((group) => (
+              <div key={group.classKey} className="space-y-2">
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-400 px-1">
+                  {group.label}
+                  <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500">{group.positions.length}</span>
+                  <span className="ml-auto font-semibold text-gray-600 normal-case tracking-normal">
+                    {fmt(group.positions.reduce((s, p) => s + (p.currentvalueTotal ?? p.investedTotal), 0))}
+                  </span>
+                </h3>
+                <RvTable positions={group.positions} loading={false} onOperate={setTxModalInvestment}
+                  onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
+              </div>
+            ))
+          )}
+        </div>
       )}
 
       {tab === 'rf' && (
@@ -217,6 +348,17 @@ function SummaryCard({ icon, iconBg, border, label, value, sub }: {
       <p className="mt-2 text-lg font-bold text-gray-900 md:text-xl">{value}</p>
       {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}</p>}
     </div>
+  )
+}
+
+function FilterChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition active:scale-95 ${
+        active ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+      }`}>
+      {label}
+    </button>
   )
 }
 
