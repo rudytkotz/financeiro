@@ -109,7 +109,12 @@ export default function TransactionsPage() {
   // Filter + sort
   const transactions = useMemo(() => {
     let list = rawTransactions
-    if (dependentId) list = list.filter((t) => t.dependentId === dependentId)
+    if (dependentId === '__none__') {
+      // "Pessoal" — transações sem dependente
+      list = list.filter((t) => t.dependentId === null)
+    } else if (dependentId) {
+      list = list.filter((t) => t.dependentId === dependentId)
+    }
     if (paymentMethodFilter) list = list.filter((t) => (t as any).paymentMethod === paymentMethodFilter)
     if (searchText.trim()) {
       const q = searchText.toLowerCase()
@@ -175,8 +180,10 @@ export default function TransactionsPage() {
 
   // Summary by dependent
   const depSummary = useMemo(() => {
+    // Usar rawTransactions para o painel de dependentes sempre mostrar todos,
+    // independente do filtro ativo
     const map = new Map<string, { name: string; total: number; count: number }>()
-    for (const t of transactions) {
+    for (const t of rawTransactions) {
       const key = t.dependentId ?? '__none__'
       const dep = t.dependentId ? (dependents ?? []).find(d => d.id === t.dependentId) : null
       if (!dep && t.dependentId) continue // skip unknown
@@ -185,9 +192,9 @@ export default function TransactionsPage() {
       map.set(key, { name, total: prev.total + t.amount, count: prev.count + 1 })
     }
     return [...map.entries()]
-      .map(([id, v]) => ({ id: id === '__none__' ? '' : id, ...v }))
+      .map(([id, v]) => ({ id, ...v })) // manter id original: '__none__' para pessoal
       .sort((a, b) => b.total - a.total)
-  }, [transactions, dependents])
+  }, [rawTransactions, dependents])
 
   const activeFilterCount = [categoryId, dependentId, paymentMethodFilter, searchText].filter(Boolean).length
 
@@ -370,7 +377,7 @@ export default function TransactionsPage() {
                     const pct = totalExpenses > 0 ? Math.min((dep.total / totalExpenses) * 100, 100) : 0
                     const isActive = dependentId === dep.id
                     return (
-                      <button key={dep.id || 'personal'}
+                      <button key={dep.id}
                         onClick={() => setDependentId(isActive ? '' : dep.id)}
                         className={`flex-shrink-0 flex flex-col items-center px-4 py-3 border-r border-gray-50 last:border-r-0 transition min-w-[100px] ${isActive ? 'bg-violet-50' : 'hover:bg-gray-50/70'}`}>
                         {/* Avatar */}
