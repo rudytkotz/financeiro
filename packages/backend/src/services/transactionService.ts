@@ -50,6 +50,7 @@ export interface UpdateTransactionData {
   description?: string
   amount?: number
   categoryId?: string
+  dependentId?: string | null
   paymentMethod?: string
   operationType?: 'despesa' | 'reembolso'
 }
@@ -64,21 +65,6 @@ function isValidDate(value: string): boolean {
   if (!DATE_REGEX.test(value)) return false
   const d = new Date(value + 'T00:00:00Z')
   return !isNaN(d.getTime()) && d.toISOString().startsWith(value)
-}
-
-function getMonthRange(month: string): { firstDay: string; lastDay: string } | null {
-  const match = /^(\d{4})-(\d{2})$/.exec(month)
-  if (!match) return null
-
-  const year = parseInt(match[1], 10)
-  const m = parseInt(match[2], 10)
-  if (m < 1 || m > 12) return null
-
-  const firstDay = `${month}-01`
-  // Last day of month: go to next month day 0
-  const lastDate = new Date(year, m, 0)
-  const lastDay = `${year}-${String(m).padStart(2, '0')}-${String(lastDate.getDate()).padStart(2, '0')}`
-  return { firstDay, lastDay }
 }
 
 // ---------------------------------------------------------------------------
@@ -274,15 +260,18 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
 
 /**
  * Atualiza uma transação existente.
- *
- * Mesmas validações do create aplicadas somente aos campos fornecidos.
+ * Verifica que a transação pertence ao userId antes de atualizar.
  */
-export async function updateTransaction(id: string, data: UpdateTransactionData): Promise<Transaction> {
-  // Verificar se a transação existe
+export async function updateTransaction(id: string, data: UpdateTransactionData, userId?: string): Promise<Transaction> {
+  // Verificar se a transação existe e pertence ao usuário
+  const whereClause = userId
+    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    : eq(transactions.id, id)
+
   const [existing] = await db
     .select()
     .from(transactions)
-    .where(eq(transactions.id, id))
+    .where(whereClause)
     .limit(1)
 
   if (!existing) {
@@ -361,6 +350,11 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
     updates.paymentMethod = data.paymentMethod
   }
 
+  // dependentId (se fornecido)
+  if (data.dependentId !== undefined) {
+    updates.dependentId = data.dependentId
+  }
+
   // Atualizar com updatedAt
   updates.updatedAt = new Date()
 
@@ -374,32 +368,38 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
   if (existing.installmentTotal && existing.installmentTotal > 1) {
     const propagateUpdates: Record<string, unknown> = {}
     if (data.categoryId !== undefined) propagateUpdates.categoryId = data.categoryId
-    if ((data as any).dependentId !== undefined) propagateUpdates.dependentId = (data as any).dependentId
+    if (data.dependentId !== undefined) propagateUpdates.dependentId = data.dependentId
 
     if (Object.keys(propagateUpdates).length > 0) {
       propagateUpdates.updatedAt = new Date()
 
-      // Se a transação pertence a uma importação, propagar por importId + installmentTotal
-      // (mais robusto do que description + amount + installmentTotal)
       if (existing.importId !== null) {
+        // Transações importadas: propagar por importId + installmentTotal
         await db
           .update(transactions)
           .set(propagateUpdates)
           .where(
-            sql`${transactions.id} != ${id}
-              AND ${transactions.importId} = ${existing.importId}
-              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+            and(
+              sql`${transactions.id} != ${id}`,
+              eq(transactions.importId, existing.importId),
+              eq(transactions.installmentTotal, existing.installmentTotal)
+            )
           )
       } else {
-        // Fallback para transações manuais: usar description + amount + installmentTotal
+        // Transações manuais: propagar por description + installmentTotal + userId
+        // NÃO usa amount pois cada parcela pode ter valor diferente (arredondamento)
         await db
           .update(transactions)
           .set(propagateUpdates)
           .where(
-            sql`${transactions.id} != ${id}
-              AND ${transactions.description} = ${existing.description}
-              AND ${transactions.amount} = ${existing.amount}
-              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+            and(
+              sql`${transactions.id} != ${id}`,
+              eq(transactions.description, existing.description),
+              eq(transactions.installmentTotal, existing.installmentTotal),
+              userId
+                ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
+                : sql`1=1`
+            )
           )
       }
     }
@@ -410,12 +410,17 @@ export async function updateTransaction(id: string, data: UpdateTransactionData)
 
 /**
  * Remove uma transação por id.
+ * Verifica que a transação pertence ao userId antes de deletar.
  */
-export async function deleteTransaction(id: string): Promise<void> {
+export async function deleteTransaction(id: string, userId?: string): Promise<void> {
+  const whereClause = userId
+    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    : eq(transactions.id, id)
+
   const [existing] = await db
     .select({ id: transactions.id })
     .from(transactions)
-    .where(eq(transactions.id, id))
+    .where(whereClause)
     .limit(1)
 
   if (!existing) {
@@ -511,19 +516,22 @@ export async function associateDependent(
           .update(transactions)
           .set({ dependentId: null, updatedAt: new Date() })
           .where(
-            sql`${transactions.id} != ${id}
-              AND ${transactions.importId} = ${existing.importId}
-              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+            and(
+              sql`${transactions.id} != ${id}`,
+              eq(transactions.importId, existing.importId),
+              eq(transactions.installmentTotal, existing.installmentTotal)
+            )
           )
       } else {
         await db
           .update(transactions)
           .set({ dependentId: null, updatedAt: new Date() })
           .where(
-            sql`${transactions.id} != ${id}
-              AND ${transactions.description} = ${existing.description}
-              AND ${transactions.amount} = ${existing.amount}
-              AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+            and(
+              sql`${transactions.id} != ${id}`,
+              eq(transactions.description, existing.description),
+              eq(transactions.installmentTotal, existing.installmentTotal)
+            )
           )
       }
     }
@@ -571,19 +579,22 @@ export async function associateDependent(
         .update(transactions)
         .set({ dependentId, updatedAt: new Date() })
         .where(
-          sql`${transactions.id} != ${id}
-            AND ${transactions.importId} = ${existing.importId}
-            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          and(
+            sql`${transactions.id} != ${id}`,
+            eq(transactions.importId, existing.importId),
+            eq(transactions.installmentTotal, existing.installmentTotal)
+          )
         )
     } else {
       await db
         .update(transactions)
         .set({ dependentId, updatedAt: new Date() })
         .where(
-          sql`${transactions.id} != ${id}
-            AND ${transactions.description} = ${existing.description}
-            AND ${transactions.amount} = ${existing.amount}
-            AND ${transactions.installmentTotal} = ${existing.installmentTotal}`
+          and(
+            sql`${transactions.id} != ${id}`,
+            eq(transactions.description, existing.description),
+            eq(transactions.installmentTotal, existing.installmentTotal)
+          )
         )
     }
   }

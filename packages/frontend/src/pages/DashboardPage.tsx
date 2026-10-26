@@ -57,10 +57,14 @@ export default function DashboardPage() {
     return map
   }, [categories])
 
+  // Valores seguros contra null vindos da API
+  const incomeAmount = dashboard?.incomeAmount ?? 0
+  const balance = dashboard?.balance ?? 0
+
   const hasNoData =
     dashboard &&
     dashboard.totalExpenses === 0 &&
-    dashboard.incomeAmount === 0
+    incomeAmount === 0
 
   return (
     <div className="space-y-6">
@@ -132,22 +136,22 @@ export default function DashboardPage() {
             </div>
 
             {/* Renda */}
-            <IncomeCard incomeAmount={dashboard.incomeAmount} month={month} />
+            <IncomeCard incomeAmount={incomeAmount} month={month} />
 
             {/* Saldo */}
-            <div className={`rounded-xl border border-l-4 bg-white p-5 shadow-sm ${dashboard.balance >= 0 ? 'border-l-emerald-400' : 'border-l-red-400'}`}>
+            <div className={`rounded-xl border border-l-4 bg-white p-5 shadow-sm ${balance >= 0 ? 'border-l-emerald-400' : 'border-l-red-400'}`}>
               <div className="flex items-center gap-2">
-                <div className={`rounded-lg p-2 ${dashboard.balance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                  <DollarSign className={`h-5 w-5 ${dashboard.balance >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
+                <div className={`rounded-lg p-2 ${balance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                  <DollarSign className={`h-5 w-5 ${balance >= 0 ? 'text-emerald-500' : 'text-red-500'}`} />
                 </div>
                 <span className="text-sm font-medium text-gray-500">Saldo</span>
               </div>
-              <p className={`mt-3 text-2xl font-bold ${dashboard.balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                {formatCurrency(dashboard.balance)}
+              <p className={`mt-3 text-2xl font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCurrency(balance)}
               </p>
-              {dashboard.incomeAmount > 0 && (
+              {incomeAmount > 0 && (
                 <p className="mt-1 text-xs text-gray-400">
-                  {Math.round((dashboard.totalExpenses / dashboard.incomeAmount) * 100)}% da renda
+                  {Math.round((dashboard.totalExpenses / incomeAmount) * 100)}% da renda
                 </p>
               )}
             </div>

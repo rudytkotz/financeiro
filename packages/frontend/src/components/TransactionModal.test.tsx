@@ -4,8 +4,8 @@ import TransactionModal from './TransactionModal'
 import type { Category, Transaction } from '@financeiro/shared'
 
 const categories: Category[] = [
-  { id: 'cat-1', name: 'Alimentação', isDefault: true },
-  { id: 'cat-2', name: 'Transporte', isDefault: false },
+  { id: 'cat-1', name: 'Alimentação', isDefault: true, color: null },
+  { id: 'cat-2', name: 'Transporte', isDefault: false, color: null },
 ]
 
 const sampleTransaction: Transaction = {

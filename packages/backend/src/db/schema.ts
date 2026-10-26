@@ -106,6 +106,8 @@ export const transactions = pgTable(
   (table) => ({
     // Index on date for efficient month-based filtering
     dateIdx: index('transactions_date_idx').on(table.date),
+    // Composite index for the most common query: list by month + user
+    refMonthUserIdx: index('transactions_reference_month_user_idx').on(table.referenceMonth, table.userId),
     // Index on category_id for category filter queries
     categoryIdx: index('transactions_category_id_idx').on(table.categoryId),
     // Index on dependent_id for dependent partitioning queries

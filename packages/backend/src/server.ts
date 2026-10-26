@@ -50,9 +50,14 @@ await app.register(cors, {
   credentials: true,
 })
 
-// JWT
+// JWT — em produção, o JWT_SECRET é obrigatório. O fallback só é permitido em dev.
+const jwtSecret = process.env.JWT_SECRET
+if (!jwtSecret && process.env.NODE_ENV === 'production') {
+  console.error('❌ JWT_SECRET é obrigatório em produção. Encerrando.')
+  process.exit(1)
+}
 await app.register(fastifyJwt, {
-  secret: process.env.JWT_SECRET ?? 'financeiro-secret-key-change-in-production',
+  secret: jwtSecret ?? 'financeiro-dev-secret-only-for-local-development',
 })
 
 // Auth hook: protect all /api routes except /api/auth/* and /api/health

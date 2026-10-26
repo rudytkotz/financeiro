@@ -49,8 +49,8 @@ export interface DashboardSummary {
   month: string
   totalExpenses: number
   totalUserExpenses: number
-  incomeAmount: number
-  balance: number
+  incomeAmount: number | null
+  balance: number | null
   expensesByCategory: Array<{
     categoryId: string
     categoryName: string
@@ -85,12 +85,14 @@ export interface CreateTransactionPayload {
   amount: number         // centavos (valor absoluto — o sinal é definido por operationType)
   categoryId: string
   dependentId?: string | null  // dependente associado à transação
+  paymentMethod?: string        // 'credito' | 'pix' | 'debito' | 'dinheiro' | 'outros'
   operationType?: 'despesa' | 'reembolso'  // 'despesa' = positivo (padrão); 'reembolso' = negativo
   installmentTotal?: number                // 1 ou undefined = à vista; 2–24 = parcelado
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
   paymentMethod?: string
+  dependentId?: string | null
 }
 
 export interface SetDependentPayload {

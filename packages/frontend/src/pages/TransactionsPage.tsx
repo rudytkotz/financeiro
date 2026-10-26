@@ -12,7 +12,7 @@ import {
 import TransactionModal from '@/components/TransactionModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DependentSelector from '@/components/DependentSelector'
-import type { Transaction } from '@financeiro/shared'
+import type { Transaction, Category, Dependent } from '@financeiro/shared'
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
@@ -86,7 +86,8 @@ export default function TransactionsPage() {
 
   const filterParams = useMemo(() => {
     const p: Record<string, string> = { month }
-    if (categoryId) p.categoryId = categoryId
+    // __none__ (sem categoria) é filtrado no frontend, não enviado ao backend
+    if (categoryId && categoryId !== '__none__') p.categoryId = categoryId
     return p
   }, [month, categoryId])
 
@@ -109,6 +110,10 @@ export default function TransactionsPage() {
   // Filter + sort
   const transactions = useMemo(() => {
     let list = rawTransactions
+    if (categoryId === '__none__') {
+      // "Sem categoria" — filtrado no frontend
+      list = list.filter((t) => !t.categoryId)
+    }
     if (dependentId === '__none__') {
       // "Pessoal" — transações sem dependente
       list = list.filter((t) => t.dependentId === null)
@@ -152,7 +157,7 @@ export default function TransactionsPage() {
   const total = useMemo(() => transactions.reduce((s, t) => s + t.amount, 0), [transactions])
   const totalExpenses = useMemo(() => transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions])
   const totalRefunds  = useMemo(() => transactions.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0), [transactions])
-  const uncategorized = useMemo(() => transactions.filter(t => !t.categoryId).length, [transactions])
+  const uncategorized = useMemo(() => rawTransactions.filter(t => !t.categoryId).length, [rawTransactions])
 
   // Summary by payment method
   const pmSummary = useMemo(() => {
@@ -164,19 +169,20 @@ export default function TransactionsPage() {
     return PAYMENT_METHODS.filter((pm) => map.has(pm.value)).map((pm) => ({ ...pm, total: map.get(pm.value)! }))
   }, [transactions])
 
-  // Summary by category
+  // Summary by category — usa rawTransactions para mostrar todas as categorias
+  // independente do filtro ativo
   const catSummary = useMemo(() => {
     const map = new Map<string, { name: string; total: number; count: number }>()
-    for (const t of transactions) {
+    for (const t of rawTransactions) {
       const key = t.categoryId ?? '__none__'
       const name = t.categoryId ? (categoryMap.get(t.categoryId) ?? 'Sem categoria') : 'Sem categoria'
       const prev = map.get(key) ?? { name, total: 0, count: 0 }
       map.set(key, { name, total: prev.total + t.amount, count: prev.count + 1 })
     }
     return [...map.entries()]
-      .map(([id, v]) => ({ id: id === '__none__' ? '' : id, ...v }))
+      .map(([id, v]) => ({ id, ...v })) // manter id original: '__none__' para sem categoria
       .sort((a, b) => b.total - a.total)
-  }, [transactions, categoryMap])
+  }, [rawTransactions, categoryMap])
 
   // Summary by dependent
   const depSummary = useMemo(() => {
@@ -321,8 +327,8 @@ export default function TransactionsPage() {
               <p className={`mt-1 text-base font-bold ${total < 0 ? 'text-emerald-600' : 'text-gray-800'}`}>{formatCurrency(total)}</p>
               <p className="text-[10px] text-gray-400">{transactions.length} transações</p>
             </div>
-            <div className={`rounded-xl border border-l-4 bg-white px-4 py-3 shadow-sm cursor-pointer transition hover:bg-gray-50 ${uncategorized > 0 ? 'border-l-amber-400' : 'border-l-gray-200'}`}
-              onClick={() => uncategorized > 0 && setCategoryId('')}>
+            <div className={`rounded-xl border border-l-4 bg-white px-4 py-3 shadow-sm cursor-pointer transition hover:bg-gray-50 ${categoryId === '__none__' ? 'ring-2 ring-amber-300' : ''} ${uncategorized > 0 ? 'border-l-amber-400' : 'border-l-gray-200'}`}
+              onClick={() => uncategorized > 0 && setCategoryId(categoryId === '__none__' ? '' : '__none__')}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Sem categoria</p>
               <p className={`mt-1 text-base font-bold ${uncategorized > 0 ? 'text-amber-600' : 'text-gray-400'}`}>{uncategorized}</p>
               <p className="text-[10px] text-gray-400">transações</p>
@@ -509,7 +515,7 @@ export default function TransactionsPage() {
 // ===========================================================================
 interface RP {
   t: Transaction; odd: boolean
-  cats: Array<{ id: string; name: string }>; deps: Array<{ id: string; name: string }>
+  cats: Category[]; deps: Dependent[]
   onDesc: (id: string, v: string, o: string) => void
   onCat: (id: string, v: string, o: string) => void
   onAmt: (id: string, d: string, o: number) => void

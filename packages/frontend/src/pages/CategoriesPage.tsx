@@ -342,7 +342,7 @@ export default function CategoriesPage() {
               <CategoryRow
                 key={category.id}
                 category={category}
-                onUpdate={(id, newName, color) => updateMutation.mutateAsync({ id, name: newName, color })}
+                onUpdate={async (id, newName, color) => { await updateMutation.mutateAsync({ id, name: newName, color }) }}
                 onDelete={(id) => { setActionError(null); deleteMutation.mutate(id) }}
                 isDeleting={deleteMutation.isPending}
               />

@@ -233,10 +233,49 @@ export async function overwriteImport(
         }
       }
 
+      // Buscar as descrições + totais de parcelas da importação anterior
+      // para deletar as parcelas standalone (outros meses) associadas
+      const oldInstallmentInfo = await tx
+        .select({
+          description: transactions.description,
+          installmentTotal: transactions.installmentTotal,
+        })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.importId, existingImport.id),
+            sql`${transactions.installmentTotal} IS NOT NULL`
+          )
+        )
+
       // Deletar transações vinculadas à importação anterior
       await tx
         .delete(transactions)
         .where(eq(transactions.importId, existingImport.id))
+
+      // Deletar parcelas standalone (outros meses) das mesmas compras parceladas
+      // Isso evita duplicação cumulativa ao reimportar meses com parcelas
+      if (oldInstallmentInfo.length > 0) {
+        const standaloneKeys = oldInstallmentInfo
+          .filter(t => t.installmentTotal)
+          .map(t => ({ description: t.description, installmentTotal: t.installmentTotal! }))
+
+        // Deduplicar por description
+        const uniqueKeys = [...new Map(standaloneKeys.map(k => [k.description, k])).values()]
+
+        for (const { description, installmentTotal } of uniqueKeys) {
+          await tx
+            .delete(transactions)
+            .where(
+              and(
+                sql`${transactions.importId} IS NULL`,
+                eq(transactions.description, description),
+                eq(transactions.installmentTotal, installmentTotal),
+                userId ? eq(transactions.userId, userId) : sql`${transactions.userId} IS NULL`
+              )
+            )
+        }
+      }
 
       // Deletar o registro de importação anterior
       await tx.delete(imports).where(eq(imports.id, existingImport.id))

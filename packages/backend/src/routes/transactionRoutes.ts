@@ -49,7 +49,7 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
     const { id } = request.params as { id: string }
     const body = request.body as UpdateTransactionData
     try {
-      const transaction = await updateTransaction(id, body)
+      const transaction = await updateTransaction(id, body, getUserId(request))
       return reply.status(200).send(transaction)
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
@@ -72,7 +72,7 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/api/transactions/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
     try {
-      await deleteTransaction(id)
+      await deleteTransaction(id, getUserId(request))
       return reply.status(204).send()
     } catch (err) {
       if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
