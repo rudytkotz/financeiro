@@ -23,6 +23,10 @@ function formatDate(iso: string): string {
 }
 
 export default function ImportsHistoryPage() {
+  return <ImportsHistorySection />
+}
+
+export function ImportsHistorySection() {
   const { data: imports, isLoading } = useImports()
   const navigate = useNavigate()
 

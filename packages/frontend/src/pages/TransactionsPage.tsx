@@ -17,7 +17,11 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
   Search, Filter, Plus, X, ChevronLeft, ChevronRight,
+  ArrowLeftRight, Upload, Tag,
 } from 'lucide-react'
+import { ImportSection } from './ImportPage'
+import { CategoriesSection } from './CategoriesPage'
+import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
 const PAYMENT_METHODS = [
@@ -66,7 +70,7 @@ type SortField = 'date' | 'description' | 'amount' | 'installment' | 'category' 
 type SortDir = 'asc' | 'desc'
 
 // ===========================================================================
-export default function TransactionsPage() {
+function TransactionsSection() {
   const location = useLocation()
   const initialMonth = (location.state as { month?: string } | null)?.month ?? getCurrentMonth()
   const [month, setMonth] = useState(initialMonth)
@@ -506,6 +510,50 @@ export default function TransactionsPage() {
       <TransactionModal open={modalOpen} onClose={handleCloseModal} onSubmit={handleSubmit} categories={categories ?? []} dependents={dependents ?? []} transaction={editingTransaction} />
       <ConfirmDialog open={deleteDialogOpen} title="Excluir transação" message="Esta ação não pode ser desfeita." confirmLabel="Excluir" cancelLabel="Cancelar" onConfirm={handleConfirmDelete} onCancel={() => { setDeleteDialogOpen(false); setTransactionToDelete(null) }} isLoading={deleteMutation.isPending} />
       <ConfirmDialog open={deleteAllDialogOpen} title="Excluir tudo" message={`Excluir todas as ${transactions.length} transações deste mês?`} confirmLabel="Sim, excluir" cancelLabel="Cancelar" onConfirm={handleConfirmDeleteAll} onCancel={() => setDeleteAllDialogOpen(false)} isLoading={deleteAllMutation.isPending} />
+    </div>
+  )
+}
+
+// ===========================================================================
+// PAGE WRAPPER — abas: Transações · Importar · Categorias
+// ===========================================================================
+type TabKey = 'transactions' | 'import' | 'categories'
+
+const TABS: { key: TabKey; label: string; icon: typeof ArrowLeftRight }[] = [
+  { key: 'transactions', label: 'Transações', icon: ArrowLeftRight },
+  { key: 'import', label: 'Importar', icon: Upload },
+  { key: 'categories', label: 'Categorias', icon: Tag },
+]
+
+export default function TransactionsPage() {
+  const location = useLocation()
+  const initialTab = (location.state as { tab?: TabKey } | null)?.tab ?? 'transactions'
+  const [tab, setTab] = useState<TabKey>(initialTab)
+
+  return (
+    <div className="space-y-5">
+      {/* Abas */}
+      <div className="flex items-center gap-1 rounded-xl border border-gray-100 bg-white p-1 shadow-sm w-fit">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
+              tab === key
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'transactions' && <TransactionsSection />}
+      {tab === 'import' && <ImportSection />}
+      {tab === 'categories' && <CategoriesSection />}
     </div>
   )
 }

@@ -180,6 +180,10 @@ function CategoryRow({
 // Main page
 // ---------------------------------------------------------------------------
 export default function CategoriesPage() {
+  return <CategoriesSection />
+}
+
+export function CategoriesSection() {
   const [name, setName] = useState('')
   const [newColor, setNewColor] = useState<string | null>('#6b7280')
   const [showNewPalette, setShowNewPalette] = useState(false)

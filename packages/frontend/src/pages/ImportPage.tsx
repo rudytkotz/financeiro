@@ -4,6 +4,7 @@ import { parseCsv, type CsvParseResult, type ParsedTransaction } from '../lib/pa
 import { useImportCsv, type ImportCsvPayload } from '../hooks/useMutations'
 import { AxiosError } from 'axios'
 import { Trash2 } from 'lucide-react'
+import { ImportsHistorySection } from './ImportsHistoryPage'
 
 function formatCurrencyInput(cents: number): string {
   const prefix = cents < 0 ? '-' : ''
@@ -24,6 +25,15 @@ interface EditableTransaction extends ParsedTransaction {
 }
 
 export default function ImportPage() {
+  return (
+    <div className="space-y-8">
+      <ImportSection />
+      <ImportsHistorySection />
+    </div>
+  )
+}
+
+export function ImportSection() {
   const [parseResult, setParseResult] = useState<CsvParseResult | null>(null)
   const [editableTransactions, setEditableTransactions] = useState<EditableTransaction[]>([])
   const [fileError, setFileError] = useState<string | null>(null)

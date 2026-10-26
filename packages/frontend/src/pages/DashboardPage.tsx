@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react'
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { Link } from 'react-router-dom'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useDependents } from '@/hooks/useDependents'
 import { useCategories } from '@/hooks/useCategories'
+import { usePortfolioSummary } from '@/hooks/useInvestments'
 import { useSetIncome } from '@/hooks/useMutations'
-import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal } from 'lucide-react'
+import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight } from 'lucide-react'
+import type { PortfolioSummary } from '@financeiro/shared'
 
 const CATEGORY_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -50,6 +53,7 @@ export default function DashboardPage() {
   })
   const { data: dependents } = useDependents()
   const { data: categories } = useCategories()
+  const { data: portfolio } = usePortfolioSummary()
 
   const categoryColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -178,6 +182,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Resumo de investimentos */}
+          <InvestmentsOverview portfolio={portfolio} />
+
           {/* Charts row */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Gráfico de pizza — Distribuição por categoria */}
@@ -283,6 +290,90 @@ export default function DashboardPage() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Investments overview (resumo geral da carteira)
+// ---------------------------------------------------------------------------
+
+function InvestmentsOverview({ portfolio }: { portfolio?: PortfolioSummary }) {
+  // Enquanto carrega ou sem carteira cadastrada, não mostra nada
+  if (!portfolio || portfolio.totalInvested === 0) return null
+
+  const profit = portfolio.totalProfitLoss
+  const isPositive = profit >= 0
+
+  return (
+    <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="rounded-lg bg-indigo-50 p-2">
+            <LineChart className="h-5 w-5 text-indigo-500" />
+          </div>
+          <h2 className="text-base font-semibold text-gray-900">Investimentos</h2>
+        </div>
+        <Link
+          to="/investments"
+          className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+        >
+          Ver carteira
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total investido */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+          <div className="flex items-center gap-1.5 text-gray-500">
+            <Wallet className="h-4 w-4" />
+            <span className="text-xs font-medium">Total investido</span>
+          </div>
+          <p className="mt-2 text-xl font-bold text-gray-900">{formatCurrency(portfolio.totalInvested)}</p>
+        </div>
+
+        {/* Valor atual */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+          <div className="flex items-center gap-1.5 text-gray-500">
+            <DollarSign className="h-4 w-4" />
+            <span className="text-xs font-medium">Valor atual</span>
+          </div>
+          <p className="mt-2 text-xl font-bold text-gray-900">{formatCurrency(portfolio.totalCurrent)}</p>
+        </div>
+
+        {/* Lucro / prejuízo */}
+        <div className={`rounded-lg border p-4 ${isPositive ? 'border-emerald-100 bg-emerald-50' : 'border-red-100 bg-red-50'}`}>
+          <div className={`flex items-center gap-1.5 ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+            {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+            <span className="text-xs font-medium">Rentabilidade</span>
+          </div>
+          <p className={`mt-2 text-xl font-bold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+            {isPositive ? '+' : ''}{formatCurrency(profit)}
+          </p>
+          <p className={`mt-0.5 text-xs font-medium ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+            {isPositive ? '+' : ''}{portfolio.totalProfitLossPct.toFixed(2)}%
+          </p>
+        </div>
+
+        {/* Distribuição RV x RF */}
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+          <div className="flex items-center gap-1.5 text-gray-500">
+            <PiggyBank className="h-4 w-4" />
+            <span className="text-xs font-medium">Distribuição</span>
+          </div>
+          <div className="mt-2 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-600">Renda variável</span>
+              <span className="text-xs font-semibold text-gray-900">{formatCurrency(portfolio.rendaVariavelTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-600">Renda fixa</span>
+              <span className="text-xs font-semibold text-gray-900">{formatCurrency(portfolio.rendaFixaTotal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

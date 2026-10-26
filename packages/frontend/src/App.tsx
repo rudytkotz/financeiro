@@ -2,10 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import DashboardPage from './pages/DashboardPage'
 import TransactionsPage from './pages/TransactionsPage'
-import ImportPage from './pages/ImportPage'
-import ImportsHistoryPage from './pages/ImportsHistoryPage'
 import InvestmentsPage from './pages/InvestmentsPage'
-import CategoriesPage from './pages/CategoriesPage'
 import DependentsPage from './pages/DependentsPage'
 import LoginPage from './pages/LoginPage'
 import AdminPage from './pages/AdminPage'
@@ -31,11 +28,12 @@ function App() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/import" element={<ImportPage />} />
-        <Route path="/imports" element={<ImportsHistoryPage />} />
         <Route path="/investments" element={<InvestmentsPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/dependents" element={<DependentsPage />} />
+        {/* Rotas antigas agora vivem dentro de Transações (abas) */}
+        <Route path="/import" element={<Navigate to="/transactions" replace state={{ tab: 'import' }} />} />
+        <Route path="/imports" element={<Navigate to="/transactions" replace state={{ tab: 'import' }} />} />
+        <Route path="/categories" element={<Navigate to="/transactions" replace state={{ tab: 'categories' }} />} />
         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
       </Route>
     </Routes>
