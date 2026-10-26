@@ -50,16 +50,21 @@ export async function resolvePortadorToDependents(
 
   // Deduplicate (case-insensitive)
   const uniqueNames = [...new Set(portadorNames.map((n) => n.trim()).filter(Boolean))]
-  const uniqueNamesLower = uniqueNames.map(n => n.toLowerCase())
 
-  // Buscar todos de uma vez com uma única query
+  // Buscar todos de uma vez usando OR encadeado (safe para poucos portadores, tipicamente 1-5)
   const existing = await db
     .select({ id: dependents.id, name: dependents.name })
     .from(dependents)
     .where(
       userId
-        ? sql`lower(${dependents.name}) = ANY(${uniqueNamesLower}) AND ${dependents.userId} = ${userId}`
-        : sql`lower(${dependents.name}) = ANY(${uniqueNamesLower}) AND ${dependents.userId} IS NULL`
+        ? and(
+            sql`lower(${dependents.name}) IN (${sql.join(uniqueNames.map(n => sql`lower(${n})`), sql`, `)})`,
+            eq(dependents.userId, userId)
+          )
+        : and(
+            sql`lower(${dependents.name}) IN (${sql.join(uniqueNames.map(n => sql`lower(${n})`), sql`, `)})`,
+            sql`${dependents.userId} IS NULL`
+          )
     )
 
   // Mapear os encontrados
