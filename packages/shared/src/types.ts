@@ -109,6 +109,30 @@ export interface PortfolioSummary {
   rendaFixaTotal: number         // centavos (valor aplicado)
 }
 
+// Posição de renda fixa (com valor atualizado estimado)
+export interface RfPosition {
+  investment: Investment
+  investedAmount: number       // centavos
+  currentValue: number         // centavos
+  profitLoss: number           // centavos
+  profitLossPct: number
+  cdiAnnual: number            // CDI atual (% a.a.)
+}
+
+// Alocação da carteira (gráfico de pizza)
+export interface AllocationSlice {
+  label: string
+  value: number       // centavos
+  category: 'renda_variavel' | 'renda_fixa'
+}
+
+// Evolução patrimônio vs CDI (gráfico de linha)
+export interface EvolutionPoint {
+  month: string          // YYYY-MM
+  invested: number       // centavos aportados acumulados
+  cdiProjected: number   // centavos: valor projetado no CDI
+}
+
 // Payloads
 
 export interface CreateInvestmentRvPayload {

@@ -10,10 +10,11 @@
 - [x] Dashboard de carteira: patrimônio, resultado, divisão RF/RV
 - [x] Isolamento por usuário em todas as rotas
 
-## v2 — rentabilidade de renda fixa
-- [ ] Integrar índices CDI/Selic/IPCA (brapi tem `/api/v2/prime-rate` e inflação, ou Banco Central API)
-- [ ] Calcular valor atualizado da renda fixa com base na taxa contratada e tempo decorrido
-- [ ] Mostrar rentabilidade projetada até o vencimento
+## v2 — rentabilidade de renda fixa (implementado)
+- [x] Integrar CDI/Selic via API do Banco Central (SGS, gratuita, sem token)
+- [x] Calcular valor atualizado da renda fixa com base na taxa contratada (pos_cdi, prefixado, ipca_mais) e tempo decorrido
+- [x] Mostrar rendimento estimado de cada ativo de RF
+- [ ] Integrar série real do IPCA (hoje usa estimativa de 4.5% a.a. para ipca_mais)
 - [ ] Alertar sobre vencimentos próximos
 
 ## v3 — proventos e dividendos
@@ -21,10 +22,12 @@
 - [ ] Calcular dividend yield da carteira
 - [ ] Histórico de proventos por ativo
 
-## v4 — análise e relatórios
-- [ ] Gráfico de evolução do patrimônio ao longo do tempo (snapshots mensais)
-- [ ] Gráfico de pizza da alocação da carteira (por ativo e por classe)
-- [ ] Rentabilidade da carteira vs CDI / IBOV (benchmark)
+## v4 — análise e relatórios (parcialmente implementado)
+- [x] Gráfico de pizza da alocação da carteira (por ativo)
+- [x] Comparação aportado vs CDI (100%) em gráfico de linha mensal
+- [x] Abas separadas para Renda Variável e Renda Fixa
+- [ ] Snapshots mensais reais do patrimônio (hoje reconstrói via aportes + CDI)
+- [ ] Benchmark vs IBOV além do CDI
 - [ ] Relatório de imposto de renda (apuração de lucro em vendas, DARF)
 
 ## v5 — automação e dados

@@ -3,7 +3,10 @@ import { api } from '@/lib/api'
 import type {
   Investment,
   RvPosition,
+  RfPosition,
   PortfolioSummary,
+  AllocationSlice,
+  EvolutionPoint,
   Quote,
   CreateInvestmentRvPayload,
   CreateInvestmentRfPayload,
@@ -40,6 +43,39 @@ export function usePortfolioSummary() {
       return data
     },
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useRfPositions() {
+  return useQuery<RfPosition[]>({
+    queryKey: ['investments', 'rf-positions'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/rf-positions')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useAllocation() {
+  return useQuery<AllocationSlice[]>({
+    queryKey: ['investments', 'allocation'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/allocation')
+      return data
+    },
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useEvolution() {
+  return useQuery<EvolutionPoint[]>({
+    queryKey: ['investments', 'evolution'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/evolution')
+      return data
+    },
+    staleTime: 10 * 60 * 1000,
   })
 }
 

@@ -7,7 +7,10 @@ import {
   addTransaction,
   deleteTransaction,
   getRvPositions,
+  getRfPositions,
   getPortfolioSummary,
+  getAllocation,
+  getEvolution,
   type ServiceError,
   type CreateRvData,
   type CreateRfData,
@@ -40,6 +43,24 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/investments/summary', async (request, reply) => {
     const summary = await getPortfolioSummary(getUserId(request))
     return reply.send(summary)
+  })
+
+  // Posições de renda fixa (com valor atualizado estimado via CDI)
+  app.get('/api/investments/rf-positions', async (request, reply) => {
+    const positions = await getRfPositions(getUserId(request))
+    return reply.send(positions)
+  })
+
+  // Alocação da carteira (para gráfico de pizza)
+  app.get('/api/investments/allocation', async (request, reply) => {
+    const allocation = await getAllocation(getUserId(request))
+    return reply.send(allocation)
+  })
+
+  // Evolução do patrimônio vs CDI (para gráfico de linha)
+  app.get('/api/investments/evolution', async (request, reply) => {
+    const evolution = await getEvolution(getUserId(request))
+    return reply.send(evolution)
   })
 
   // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar)

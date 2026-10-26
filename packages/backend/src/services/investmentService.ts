@@ -3,6 +3,7 @@ import { db } from '../db/index.js'
 import { investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes } from './quoteService.js'
+import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries } from './rateService.js'
 
 export interface ServiceError {
   statusCode: number
@@ -334,4 +335,196 @@ export async function getPortfolioSummary(userId: string): Promise<PortfolioSumm
     rendaVariavelTotal: rvCurrent,
     rendaFixaTotal: rfTotal,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rentabilidade de renda fixa (valor atualizado via CDI / taxa contratada)
+// ---------------------------------------------------------------------------
+
+export interface RfPosition {
+  investment: Investment
+  investedAmount: number       // centavos
+  currentValue: number         // centavos (valor atualizado estimado)
+  profitLoss: number           // centavos
+  profitLossPct: number
+  cdiAnnual: number            // CDI atual usado no cálculo
+}
+
+/**
+ * Estima o valor atual de um ativo de renda fixa com base na taxa contratada,
+ * no CDI acumulado desde a aplicação e no tempo decorrido.
+ *
+ * - pos_cdi:    rende (rateValue% do CDI) sobre o fator CDI acumulado
+ * - prefixado:  rende rateValue% a.a. compostos pro rata
+ * - ipca_mais:  aproximado como (IPCA estimado + rateValue%); sem série do IPCA
+ *               aqui usamos uma estimativa conservadora usando só o spread + CDI parcial
+ *
+ * É uma ESTIMATIVA. Valores exatos dependem de marcação a mercado e isenções.
+ */
+async function estimateRfCurrentValue(inv: Investment): Promise<{ currentValue: number; cdiAnnual: number }> {
+  const invested = inv.investedAmount ?? 0
+  const cdiAnnual = await getCurrentCdiAnnual()
+
+  if (!inv.applicationDate || invested <= 0 || inv.rateValue === null) {
+    return { currentValue: invested, cdiAnnual }
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const ratePct = inv.rateValue / 100 // rateValue é % * 100
+
+  if (inv.rateType === 'pos_cdi') {
+    // Fator CDI acumulado no período × (% do CDI contratado)
+    const cdiFactor = await getCdiAccumulatedFactor(inv.applicationDate, today)
+    // Ex: 110% do CDI → aplica 110% sobre o rendimento (fator - 1)
+    const cdiReturn = cdiFactor - 1
+    const contractedReturn = cdiReturn * (ratePct / 100)
+    return { currentValue: Math.round(invested * (1 + contractedReturn)), cdiAnnual }
+  }
+
+  // prefixado e ipca_mais: compor pro rata pelos dias
+  const start = new Date(inv.applicationDate + 'T00:00:00')
+  const end = new Date(today + 'T00:00:00')
+  const years = Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365))
+
+  if (inv.rateType === 'prefixado') {
+    const factor = Math.pow(1 + ratePct / 100, years)
+    return { currentValue: Math.round(invested * factor), cdiAnnual }
+  }
+
+  if (inv.rateType === 'ipca_mais') {
+    // Sem série do IPCA integrada; estima IPCA ~4.5% a.a. + spread contratado
+    const ipcaEstimate = 4.5
+    const totalRate = ipcaEstimate + ratePct
+    const factor = Math.pow(1 + totalRate / 100, years)
+    return { currentValue: Math.round(invested * factor), cdiAnnual }
+  }
+
+  return { currentValue: invested, cdiAnnual }
+}
+
+/**
+ * Retorna as posições de renda fixa com valor atualizado estimado.
+ */
+export async function getRfPositions(userId: string): Promise<RfPosition[]> {
+  const rfInvestments = await db
+    .select()
+    .from(investments)
+    .where(and(eq(investments.userId, userId), eq(investments.type, 'renda_fixa')))
+    .orderBy(asc(investments.name))
+
+  const positions: RfPosition[] = []
+  for (const inv of rfInvestments) {
+    const invested = inv.investedAmount ?? 0
+    const { currentValue, cdiAnnual } = await estimateRfCurrentValue(inv)
+    const profitLoss = currentValue - invested
+    const profitLossPct = invested > 0 ? Math.round((profitLoss / invested) * 10000) / 100 : 0
+    positions.push({ investment: inv, investedAmount: invested, currentValue, profitLoss, profitLossPct, cdiAnnual })
+  }
+
+  return positions
+}
+
+// ---------------------------------------------------------------------------
+// Alocação da carteira (para gráfico de pizza)
+// ---------------------------------------------------------------------------
+
+export interface AllocationSlice {
+  label: string
+  value: number       // centavos
+  category: 'renda_variavel' | 'renda_fixa'
+}
+
+export async function getAllocation(userId: string): Promise<AllocationSlice[]> {
+  const [rvPositions, rfPositions] = await Promise.all([
+    getRvPositions(userId),
+    getRfPositions(userId),
+  ])
+
+  const slices: AllocationSlice[] = []
+
+  for (const pos of rvPositions) {
+    if (pos.quantity <= 0) continue
+    const value = pos.currentvalueTotal ?? pos.investedTotal
+    if (value > 0) {
+      slices.push({ label: pos.investment.ticker ?? pos.investment.name, value, category: 'renda_variavel' })
+    }
+  }
+
+  for (const pos of rfPositions) {
+    if (pos.currentValue > 0) {
+      slices.push({ label: pos.investment.name, value: pos.currentValue, category: 'renda_fixa' })
+    }
+  }
+
+  return slices.sort((a, b) => b.value - a.value)
+}
+
+// ---------------------------------------------------------------------------
+// Evolução do patrimônio vs CDI (para gráfico de linha)
+// ---------------------------------------------------------------------------
+
+export interface EvolutionPoint {
+  month: string          // YYYY-MM
+  invested: number       // centavos aportados acumulados até o mês
+  cdiProjected: number   // centavos: valor que os aportes renderiam no CDI
+}
+
+/**
+ * Compara o total aportado ao longo do tempo com o quanto esse mesmo dinheiro
+ * teria rendido se aplicado no CDI (100% CDI) a partir de cada aporte.
+ *
+ * Simplificação: considera os aportes de RV (compras) e as aplicações de RF
+ * como fluxos de caixa, e projeta cada um pelo fator CDI até hoje.
+ */
+export async function getEvolution(userId: string): Promise<EvolutionPoint[]> {
+  // Reunir todos os aportes (compras RV + aplicações RF) com data e valor
+  const rvTxs = await db
+    .select()
+    .from(investmentTransactions)
+    .where(and(eq(investmentTransactions.userId, userId), eq(investmentTransactions.operation, 'compra')))
+
+  const rfInvestments = await db
+    .select()
+    .from(investments)
+    .where(and(eq(investments.userId, userId), eq(investments.type, 'renda_fixa')))
+
+  const contributions: Array<{ date: string; amount: number }> = []
+  for (const tx of rvTxs) {
+    contributions.push({ date: tx.date, amount: tx.quantity * tx.unitPrice + tx.fees })
+  }
+  for (const inv of rfInvestments) {
+    if (inv.applicationDate && inv.investedAmount) {
+      contributions.push({ date: inv.applicationDate, amount: inv.investedAmount })
+    }
+  }
+
+  if (contributions.length === 0) return []
+
+  contributions.sort((a, b) => a.date.localeCompare(b.date))
+  const firstDate = contributions[0].date
+
+  // Série mensal do CDI desde o primeiro aporte
+  const cdiSeries = await getCdiMonthlySeries(firstDate)
+  if (cdiSeries.length === 0) return []
+
+  const points: EvolutionPoint[] = []
+
+  for (const { month } of cdiSeries) {
+    const monthEnd = `${month}-28` // aproximação suficiente para comparação mensal
+    let investedAccum = 0
+    let cdiAccum = 0
+
+    for (const c of contributions) {
+      if (c.date <= monthEnd) {
+        investedAccum += c.amount
+        // Projeta este aporte pelo CDI da data do aporte até o fim do mês
+        const factor = await getCdiAccumulatedFactor(c.date, monthEnd)
+        cdiAccum += Math.round(c.amount * factor)
+      }
+    }
+
+    points.push({ month, invested: investedAccum, cdiProjected: cdiAccum })
+  }
+
+  return points
 }
