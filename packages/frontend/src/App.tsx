@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage'
 import TransactionsPage from './pages/TransactionsPage'
 import ImportPage from './pages/ImportPage'
 import ImportsHistoryPage from './pages/ImportsHistoryPage'
+import InvestmentsPage from './pages/InvestmentsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import DependentsPage from './pages/DependentsPage'
 import LoginPage from './pages/LoginPage'
@@ -32,6 +33,7 @@ function App() {
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/import" element={<ImportPage />} />
         <Route path="/imports" element={<ImportsHistoryPage />} />
+        <Route path="/investments" element={<InvestmentsPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/dependents" element={<DependentsPage />} />
         <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />

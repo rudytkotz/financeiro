@@ -128,6 +128,71 @@ export const income = pgTable('income', {
 })
 
 // ---------------------------------------------------------------------------
+// investments — ativos de renda fixa e variável
+// ---------------------------------------------------------------------------
+export const investments = pgTable(
+  'investments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // 'renda_variavel' | 'renda_fixa'
+    type: varchar('type', { length: 20 }).notNull(),
+    // Renda variável: ticker da B3 (ex: PETR4, HGLG11). Renda fixa: null
+    ticker: varchar('ticker', { length: 20 }),
+    // Nome do ativo (ex: 'Petrobras PN' ou 'CDB Banco XP 110% CDI')
+    name: varchar('name', { length: 120 }).notNull(),
+    // Subtipo para renda variável: 'acao' | 'fii' | 'etf' | 'bdr'
+    // Subtipo para renda fixa: 'cdb' | 'tesouro' | 'lci' | 'lca' | 'debenture' | 'outro'
+    assetClass: varchar('asset_class', { length: 20 }),
+
+    // --- Campos específicos de renda fixa ---
+    // Valor aplicado em centavos (renda fixa)
+    investedAmount: bigint('invested_amount', { mode: 'number' }),
+    // Data de aplicação (renda fixa)
+    applicationDate: date('application_date'),
+    // Data de vencimento (renda fixa)
+    maturityDate: date('maturity_date'),
+    // Tipo de rentabilidade: 'pos_cdi' | 'prefixado' | 'ipca_mais'
+    rateType: varchar('rate_type', { length: 20 }),
+    // Taxa contratada: para pos_cdi = % do CDI (ex: 110.00); prefixado/ipca = % a.a.
+    // Armazenada como basis points * 100 (ex: 110.00% = 11000) para precisão
+    rateValue: integer('rate_value'),
+
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    userIdx: index('investments_user_id_idx').on(table.userId),
+    tickerIdx: index('investments_ticker_idx').on(table.ticker),
+  })
+)
+
+// ---------------------------------------------------------------------------
+// investment_transactions — operações de compra/venda (renda variável)
+// ---------------------------------------------------------------------------
+export const investmentTransactions = pgTable(
+  'investment_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    investmentId: uuid('investment_id').notNull().references(() => investments.id, { onDelete: 'cascade' }),
+    // 'compra' | 'venda'
+    operation: varchar('operation', { length: 10 }).notNull(),
+    quantity: integer('quantity').notNull(),
+    // Preço unitário em centavos
+    unitPrice: bigint('unit_price', { mode: 'number' }).notNull(),
+    // Taxas/corretagem em centavos (opcional)
+    fees: bigint('fees', { mode: 'number' }).notNull().default(0),
+    date: date('date').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    investmentIdx: index('investment_transactions_investment_id_idx').on(table.investmentId),
+    userIdx: index('investment_transactions_user_id_idx').on(table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
 // telegram_links (vinculo chat_id → user)
 // ---------------------------------------------------------------------------
 export const telegramLinks = pgTable('telegram_links', {
@@ -157,3 +222,9 @@ export type NewTransaction = typeof transactions.$inferInsert
 
 export type Income = typeof income.$inferSelect
 export type NewIncome = typeof income.$inferInsert
+
+export type Investment = typeof investments.$inferSelect
+export type NewInvestment = typeof investments.$inferInsert
+
+export type InvestmentTransaction = typeof investmentTransactions.$inferSelect
+export type NewInvestmentTransaction = typeof investmentTransactions.$inferInsert

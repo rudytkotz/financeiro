@@ -16,6 +16,7 @@ import dependentRoutes from './routes/dependentRoutes.js'
 import importRoutes from './routes/importRoutes.js'
 import incomeRoutes from './routes/incomeRoutes.js'
 import transactionRoutes from './routes/transactionRoutes.js'
+import investmentRoutes from './routes/investmentRoutes.js'
 
 config()
 
@@ -91,6 +92,7 @@ await app.register(dependentRoutes)
 await app.register(importRoutes)
 await app.register(incomeRoutes)
 await app.register(transactionRoutes)
+await app.register(investmentRoutes)
 
 // Servir o frontend como arquivos estáticos (produção)
 const fs = await import('fs')

@@ -43,6 +43,103 @@ export interface Import {
   transactionCount: number
 }
 
+// Investimentos
+
+export type InvestmentType = 'renda_variavel' | 'renda_fixa'
+export type RvAssetClass = 'acao' | 'fii' | 'etf' | 'bdr'
+export type RfAssetClass = 'cdb' | 'tesouro' | 'lci' | 'lca' | 'debenture' | 'outro'
+export type RateType = 'pos_cdi' | 'prefixado' | 'ipca_mais'
+
+export interface Investment {
+  id: string
+  type: InvestmentType
+  ticker: string | null
+  name: string
+  assetClass: string | null
+  investedAmount: number | null    // centavos (renda fixa)
+  applicationDate: string | null   // YYYY-MM-DD (renda fixa)
+  maturityDate: string | null      // YYYY-MM-DD (renda fixa)
+  rateType: string | null          // 'pos_cdi' | 'prefixado' | 'ipca_mais'
+  rateValue: number | null         // % * 100 (ex: 110.00% = 11000)
+  createdAt: string
+  updatedAt: string
+}
+
+export interface InvestmentTransaction {
+  id: string
+  investmentId: string
+  operation: 'compra' | 'venda'
+  quantity: number
+  unitPrice: number   // centavos
+  fees: number        // centavos
+  date: string        // YYYY-MM-DD
+  createdAt: string
+}
+
+// Cotação atual (via brapi.dev)
+export interface Quote {
+  ticker: string
+  price: number          // em reais (float), vem da API
+  change: number         // variação % do dia
+  previousClose: number
+  name: string | null
+  updatedAt: string | null
+}
+
+// Posição consolidada de renda variável (calculada)
+export interface RvPosition {
+  investment: Investment
+  quantity: number           // quantidade atual em carteira
+  averagePrice: number       // preço médio em centavos
+  investedTotal: number      // total investido em centavos (qtd * pm)
+  currentPrice: number | null   // cotação atual em centavos
+  currentvalueTotal: number | null // valor atual em centavos
+  profitLoss: number | null     // lucro/prejuízo em centavos
+  profitLossPct: number | null  // lucro/prejuízo em %
+  transactions: InvestmentTransaction[]
+}
+
+// Resumo consolidado da carteira
+export interface PortfolioSummary {
+  totalInvested: number          // centavos (RF aplicado + RV ao preço médio)
+  totalCurrent: number           // centavos (RF aplicado + RV ao valor de mercado)
+  totalProfitLoss: number        // centavos
+  totalProfitLossPct: number
+  rendaVariavelTotal: number     // centavos (valor de mercado)
+  rendaFixaTotal: number         // centavos (valor aplicado)
+}
+
+// Payloads
+
+export interface CreateInvestmentRvPayload {
+  ticker: string
+  name: string
+  assetClass: RvAssetClass
+  // operação inicial opcional
+  quantity?: number
+  unitPrice?: number    // centavos
+  fees?: number         // centavos
+  date?: string         // YYYY-MM-DD
+}
+
+export interface CreateInvestmentRfPayload {
+  name: string
+  assetClass: RfAssetClass
+  investedAmount: number       // centavos
+  applicationDate: string      // YYYY-MM-DD
+  maturityDate?: string | null // YYYY-MM-DD
+  rateType: RateType
+  rateValue: number            // % * 100
+}
+
+export interface CreateInvestmentTransactionPayload {
+  operation: 'compra' | 'venda'
+  quantity: number
+  unitPrice: number   // centavos
+  fees?: number       // centavos
+  date: string        // YYYY-MM-DD
+}
+
 // Dashboard
 
 export interface DashboardSummary {
