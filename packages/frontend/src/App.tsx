@@ -9,6 +9,7 @@ import { useAuth } from './hooks/useAuth'
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
 const AccountsPage = lazy(() => import('./pages/AccountsPage'))
+const GoalsPage = lazy(() => import('./pages/GoalsPage'))
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'))
 const DependentsPage = lazy(() => import('./pages/DependentsPage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
@@ -50,6 +51,10 @@ function App() {
         <Route
           path="/accounts"
           element={<Suspense fallback={<PageLoader />}><AccountsPage /></Suspense>}
+        />
+        <Route
+          path="/goals"
+          element={<Suspense fallback={<PageLoader />}><GoalsPage /></Suspense>}
         />
         <Route
           path="/investments"

@@ -59,13 +59,15 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Painel "Fatura atual" no card da conta (total, fechamento, vencimento, barra de uso do limite)
 - Observação: modelo simplificado de ciclo (compras entre fechamento anterior exclusivo e atual inclusivo)
 
+### Fase 6 — Metas financeiras (#6)
+- Tabelas `goals` e `goal_contributions` + migration `0018_goals.sql`
+- Service com progresso (%, restante) e aportes/retiradas (atualiza acumulado em transação)
+- CRUD + aportes com validação Zod
+- Página "Metas" (menu próprio): barra de progresso, prazo, registrar aporte inline, estado "meta atingida"
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 6 — Metas financeiras (#6)
-- [ ] Tabela `goals` (objetivo, valor alvo, prazo)
-- [ ] Barra de progresso e aportes
 
 ### Fase 7 — Projeções e saúde financeira (#7)
 - [ ] Previsão de saldo futuro com base em recorrentes

@@ -151,6 +151,27 @@ export const updateRecurringSchema = createRecurringSchema.partial().extend({
 })
 
 // ---------------------------------------------------------------------------
+// Metas financeiras
+// ---------------------------------------------------------------------------
+
+export const createGoalSchema = z.object({
+  name: z.string().trim().min(1, 'O nome da meta é obrigatório.').max(80),
+  targetAmount: z.number().int().positive('O valor alvo deve ser maior que zero.'),
+  targetDate: dateISO.nullable().optional(),
+  color: hexColor.nullable().optional(),
+})
+
+export const updateGoalSchema = createGoalSchema.partial().extend({
+  archived: z.boolean().optional(),
+})
+
+export const addContributionSchema = z.object({
+  amount: z.number().int().refine((n) => n !== 0, 'O valor não pode ser zero.'),
+  date: dateISO,
+  note: z.string().trim().max(120).nullable().optional(),
+})
+
+// ---------------------------------------------------------------------------
 // Params comuns
 // ---------------------------------------------------------------------------
 

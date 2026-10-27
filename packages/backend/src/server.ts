@@ -18,6 +18,7 @@ import adminRoutes from './routes/adminRoutes.js'
 import accountRoutes from './routes/accountRoutes.js'
 import budgetRoutes from './routes/budgetRoutes.js'
 import recurringRoutes from './routes/recurringRoutes.js'
+import goalRoutes from './routes/goalRoutes.js'
 import categoryRoutes from './routes/categoryRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import dependentRoutes from './routes/dependentRoutes.js'
@@ -124,6 +125,7 @@ await app.register(adminRoutes)
 await app.register(accountRoutes)
 await app.register(budgetRoutes)
 await app.register(recurringRoutes)
+await app.register(goalRoutes)
 await app.register(categoryRoutes)
 await app.register(dashboardRoutes)
 await app.register(dependentRoutes)

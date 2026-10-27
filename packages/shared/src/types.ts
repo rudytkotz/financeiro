@@ -50,6 +50,42 @@ export interface CreateRecurringPayload {
   endMonth?: string | null
 }
 
+// Metas financeiras
+export interface Goal {
+  id: string
+  name: string
+  targetAmount: number     // centavos
+  currentAmount: number    // centavos
+  targetDate: string | null
+  color: string | null
+  archived: boolean
+  createdAt: string
+  percentage: number       // currentAmount / targetAmount * 100
+  remaining: number        // centavos
+}
+
+export interface GoalContribution {
+  id: string
+  goalId: string
+  amount: number           // centavos (positivo=aporte, negativo=retirada)
+  date: string
+  note: string | null
+  createdAt: string
+}
+
+export interface CreateGoalPayload {
+  name: string
+  targetAmount: number
+  targetDate?: string | null
+  color?: string | null
+}
+
+export interface AddContributionPayload {
+  amount: number
+  date: string
+  note?: string | null
+}
+
 export interface Category {
   id: string
   name: string           // max 50 chars

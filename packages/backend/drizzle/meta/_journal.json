@@ -127,6 +127,13 @@
       "when": 1725700000000,
       "tag": "0017_recurring_transactions",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1725800000000,
+      "tag": "0018_goals",
+      "breakpoints": true
     }
   ]
 }

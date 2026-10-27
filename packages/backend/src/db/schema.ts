@@ -333,6 +333,47 @@ export const budgets = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// goals — metas financeiras (reserva, objetivos) com aportes
+// ---------------------------------------------------------------------------
+export const goals = pgTable(
+  'goals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 80 }).notNull(),
+    targetAmount: bigint('target_amount', { mode: 'number' }).notNull(), // centavos
+    // Valor já guardado, atualizado pelos aportes
+    currentAmount: bigint('current_amount', { mode: 'number' }).notNull().default(0),
+    targetDate: date('target_date'), // prazo (nullable)
+    color: varchar('color', { length: 7 }),
+    archived: boolean('archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    userIdx: index('goals_user_id_idx').on(table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
+// goal_contributions — aportes/retiradas de uma meta
+// ---------------------------------------------------------------------------
+export const goalContributions = pgTable(
+  'goal_contributions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    goalId: uuid('goal_id').notNull().references(() => goals.id, { onDelete: 'cascade' }),
+    amount: bigint('amount', { mode: 'number' }).notNull(), // centavos (positivo=aporte, negativo=retirada)
+    date: date('date').notNull(),
+    note: varchar('note', { length: 120 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    goalIdx: index('goal_contributions_goal_id_idx').on(table.goalId),
+  })
+)
+
+// ---------------------------------------------------------------------------
 // telegram_links (vinculo chat_id → user)
 // ---------------------------------------------------------------------------
 export const telegramLinks = pgTable('telegram_links', {
@@ -386,3 +427,9 @@ export type NewBudget = typeof budgets.$inferInsert
 
 export type RecurringTransaction = typeof recurringTransactions.$inferSelect
 export type NewRecurringTransaction = typeof recurringTransactions.$inferInsert
+
+export type Goal = typeof goals.$inferSelect
+export type NewGoal = typeof goals.$inferInsert
+
+export type GoalContribution = typeof goalContributions.$inferSelect
+export type NewGoalContribution = typeof goalContributions.$inferInsert
