@@ -15,6 +15,7 @@ import { db, dbPool } from './db/index.js'
 import { registerErrorHandler } from './lib/errorHandler.js'
 import authRoutes from './routes/authRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
+import accountRoutes from './routes/accountRoutes.js'
 import categoryRoutes from './routes/categoryRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import dependentRoutes from './routes/dependentRoutes.js'
@@ -118,6 +119,7 @@ app.get('/api/health', async (_request, reply) => {
 // ---------------------------------------------------------------------------
 await app.register(authRoutes)
 await app.register(adminRoutes)
+await app.register(accountRoutes)
 await app.register(categoryRoutes)
 await app.register(dashboardRoutes)
 await app.register(dependentRoutes)

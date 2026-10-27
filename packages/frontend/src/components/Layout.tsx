@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  Wallet,
   LineChart,
   Users,
   Shield,
@@ -25,6 +26,7 @@ export default function Layout() {
   const navItems = [
     { to: '/', label: 'Painel', icon: LayoutDashboard },
     { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
+    { to: '/accounts', label: 'Contas', icon: Wallet },
     { to: '/investments', label: 'Investimentos', icon: LineChart },
     { to: '/dependents', label: 'Dependentes', icon: Users },
     ...(user?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),

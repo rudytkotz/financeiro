@@ -99,6 +99,7 @@ export const transactions = pgTable(
     installmentCurrent: integer('installment_current'), // parcela atual (nullable)
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
     referenceMonth: varchar('reference_month', { length: 7 }), // YYYY-MM — mês em que a transação deve aparecer
+    accountId: uuid('account_id').references(() => accounts.id), // conta/carteira (nullable)
     userId: uuid('user_id').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -126,6 +127,32 @@ export const income = pgTable('income', {
   amount: bigint('amount', { mode: 'number' }).notNull(), // centavos
   userId: uuid('user_id').references(() => users.id),
 })
+
+// ---------------------------------------------------------------------------
+// accounts — contas/carteiras (onde o dinheiro está)
+// ---------------------------------------------------------------------------
+export const accounts = pgTable(
+  'accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 60 }).notNull(),
+    // 'corrente' | 'poupanca' | 'carteira' | 'cartao' | 'investimento' | 'outro'
+    type: varchar('type', { length: 20 }).notNull().default('corrente'),
+    // Saldo inicial em centavos (o saldo atual é calculado: inicial + transações)
+    initialBalance: bigint('initial_balance', { mode: 'number' }).notNull().default(0),
+    color: varchar('color', { length: 7 }),
+    // Cartão de crédito: dia de fechamento e vencimento da fatura, e limite
+    closingDay: integer('closing_day'),     // 1-31 (apenas cartão)
+    dueDay: integer('due_day'),              // 1-31 (apenas cartão)
+    creditLimit: bigint('credit_limit', { mode: 'number' }), // centavos (apenas cartão)
+    archived: boolean('archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    userIdx: index('accounts_user_id_idx').on(table.userId),
+  })
+)
 
 // ---------------------------------------------------------------------------
 // investments — ativos de renda fixa e variável
@@ -283,6 +310,9 @@ export type NewTransaction = typeof transactions.$inferInsert
 
 export type Income = typeof income.$inferSelect
 export type NewIncome = typeof income.$inferInsert
+
+export type Account = typeof accounts.$inferSelect
+export type NewAccount = typeof accounts.$inferInsert
 
 export type Investment = typeof investments.$inferSelect
 export type NewInvestment = typeof investments.$inferInsert

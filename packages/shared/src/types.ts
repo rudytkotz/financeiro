@@ -13,6 +13,7 @@ export interface Transaction {
   paymentMethod: string  // 'credito' | 'pix' | 'debito' | 'dinheiro' | 'outros'
   installmentCurrent: number | null
   installmentTotal: number | null
+  accountId: string | null
   createdAt: string
   updatedAt: string
 }
@@ -34,6 +35,33 @@ export interface Income {
   id: string
   month: string          // YYYY-MM
   amount: number         // positivo, centavos (integer)
+}
+
+// Contas / carteiras
+export type AccountType = 'corrente' | 'poupanca' | 'carteira' | 'cartao' | 'investimento' | 'outro'
+
+export interface Account {
+  id: string
+  name: string
+  type: AccountType
+  initialBalance: number       // centavos
+  color: string | null
+  closingDay: number | null    // dia de fechamento da fatura (cartão)
+  dueDay: number | null        // dia de vencimento da fatura (cartão)
+  creditLimit: number | null   // centavos (cartão)
+  archived: boolean
+  createdAt: string
+  currentBalance: number       // centavos (calculado no backend)
+}
+
+export interface CreateAccountPayload {
+  name: string
+  type?: AccountType
+  initialBalance?: number
+  color?: string | null
+  closingDay?: number | null
+  dueDay?: number | null
+  creditLimit?: number | null
 }
 
 export interface Import {

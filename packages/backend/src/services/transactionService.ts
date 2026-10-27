@@ -29,6 +29,7 @@ export interface CreateTransactionData {
   amount: number
   categoryId: string
   dependentId?: string | null
+  accountId?: string | null
   operationType?: 'despesa' | 'reembolso'
   installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
   paymentMethod?: string
@@ -40,6 +41,7 @@ export interface UpdateTransactionData {
   amount?: number
   categoryId?: string | null
   dependentId?: string | null
+  accountId?: string | null
   paymentMethod?: string
   operationType?: 'despesa' | 'reembolso'
 }
@@ -193,6 +195,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
         amount,
         categoryId,
         dependentId: data.dependentId ?? null,
+        accountId: data.accountId ?? null,
         source: 'manual',
         importId: null,
         referenceMonth: date.substring(0, 7),
@@ -228,6 +231,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
       amount: installAmount,
       categoryId,
       dependentId: data.dependentId ?? null as string | null,
+      accountId: data.accountId ?? null as string | null,
       source: 'manual' as const,
       importId: null as string | null,
       referenceMonth: refMonth,
@@ -342,6 +346,11 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
   // dependentId (se fornecido)
   if (data.dependentId !== undefined) {
     updates.dependentId = data.dependentId
+  }
+
+  // accountId (se fornecido)
+  if (data.accountId !== undefined) {
+    updates.accountId = data.accountId
   }
 
   // Atualizar com updatedAt

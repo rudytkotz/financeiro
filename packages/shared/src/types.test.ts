@@ -17,6 +17,7 @@ describe('shared types', () => {
       paymentMethod: 'credito',
       installmentCurrent: null,
       installmentTotal: null,
+      accountId: null,
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
     }

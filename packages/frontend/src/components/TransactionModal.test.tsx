@@ -21,6 +21,7 @@ const sampleTransaction: Transaction = {
   paymentMethod: 'credito',
   installmentCurrent: null,
   installmentTotal: null,
+  accountId: null,
   createdAt: '2024-03-15T10:00:00Z',
   updatedAt: '2024-03-15T10:00:00Z',
 }

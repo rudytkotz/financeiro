@@ -21,6 +21,7 @@ export const createTransactionSchema = z.object({
   amount: z.number().int().refine((n) => n !== 0, 'O valor não pode ser zero.'),
   categoryId: uuid,
   dependentId: uuid.nullable().optional(),
+  accountId: uuid.nullable().optional(),
   operationType: operationType.optional(),
   installmentTotal: z.number().int().min(1).max(24).optional(),
   paymentMethod: paymentMethod.optional(),
@@ -32,6 +33,7 @@ export const updateTransactionSchema = z.object({
   amount: z.number().int().refine((n) => n !== 0, 'O valor não pode ser zero.').optional(),
   categoryId: uuid.nullable().optional(),
   dependentId: uuid.nullable().optional(),
+  accountId: uuid.nullable().optional(),
   paymentMethod: paymentMethod.optional(),
   operationType: operationType.optional(),
 })
@@ -72,6 +74,27 @@ export const createCategorySchema = z.object({
 export const updateCategorySchema = z.object({
   name: z.string().trim().min(1).max(50),
   color: hexColor.nullable().optional(),
+})
+
+// ---------------------------------------------------------------------------
+// Contas / carteiras
+// ---------------------------------------------------------------------------
+
+const accountType = z.enum(['corrente', 'poupanca', 'carteira', 'cartao', 'investimento', 'outro'])
+const day = z.number().int().min(1).max(31)
+
+export const createAccountSchema = z.object({
+  name: z.string().trim().min(1, 'O nome da conta é obrigatório.').max(60),
+  type: accountType.optional(),
+  initialBalance: z.number().int().optional(),
+  color: hexColor.nullable().optional(),
+  closingDay: day.nullable().optional(),
+  dueDay: day.nullable().optional(),
+  creditLimit: z.number().int().nonnegative().nullable().optional(),
+})
+
+export const updateAccountSchema = createAccountSchema.partial().extend({
+  archived: z.boolean().optional(),
 })
 
 // ---------------------------------------------------------------------------

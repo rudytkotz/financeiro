@@ -8,6 +8,7 @@ import { useAuth } from './hooks/useAuth'
 // Dashboard e Investimentos usam recharts (pesado) — ficam fora do carregamento inicial.
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
+const AccountsPage = lazy(() => import('./pages/AccountsPage'))
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'))
 const DependentsPage = lazy(() => import('./pages/DependentsPage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
@@ -45,6 +46,10 @@ function App() {
         <Route
           path="/transactions"
           element={<Suspense fallback={<PageLoader />}><TransactionsPage /></Suspense>}
+        />
+        <Route
+          path="/accounts"
+          element={<Suspense fallback={<PageLoader />}><AccountsPage /></Suspense>}
         />
         <Route
           path="/investments"

@@ -99,6 +99,13 @@
       "when": 1725300000000,
       "tag": "0013_investments_advanced",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1725400000000,
+      "tag": "0014_accounts",
+      "breakpoints": true
     }
   ]
 }
