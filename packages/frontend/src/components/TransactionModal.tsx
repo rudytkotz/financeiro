@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
-import type { Transaction, Category, Dependent } from '@financeiro/shared'
-import { ArrowDownCircle, ArrowUpCircle, CreditCard, Smartphone, Wallet, Banknote } from 'lucide-react'
+import type { Transaction, Category, Dependent, Account } from '@financeiro/shared'
+import { ArrowDownCircle, ArrowUpCircle, CreditCard, Smartphone, Wallet, Banknote, TrendingUp, TrendingDown } from 'lucide-react'
 
 type OperationType = 'despesa' | 'reembolso'
+type TxKind = 'despesa' | 'receita'
 
 const PAYMENT_METHODS = [
   { value: 'credito',   label: 'Crédito',   icon: CreditCard },
@@ -21,12 +22,15 @@ export interface TransactionModalProps {
     amount: number
     categoryId: string
     dependentId: string | null
+    accountId: string | null
+    kind: TxKind
     operationType: OperationType
     installmentTotal: number
     paymentMethod: string
   }) => Promise<void>
   categories: Category[]
   dependents?: Dependent[]
+  accounts?: Account[]
   transaction?: Transaction | null
 }
 
@@ -64,6 +68,7 @@ export default function TransactionModal({
   onSubmit,
   categories,
   dependents = [],
+  accounts = [],
   transaction,
 }: TransactionModalProps) {
   const isEdit = !!transaction
@@ -75,6 +80,8 @@ export default function TransactionModal({
   const [amountDisplay, setAmountDisplay] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [dependentId, setDependentId] = useState<string>('')
+  const [accountId, setAccountId] = useState<string>('')
+  const [kind, setKind] = useState<TxKind>('despesa')
   const [operationType, setOperationType] = useState<OperationType>('despesa')
   const [paymentMethod, setPaymentMethod] = useState('credito')
   const [installmentTotal, setInstallmentTotal] = useState(1)
@@ -94,6 +101,8 @@ export default function TransactionModal({
         setAmountDisplay(centsToBrl(transaction.amount))
         setCategoryId(transaction.categoryId ?? '')
         setDependentId(transaction.dependentId ?? '')
+        setAccountId(transaction.accountId ?? '')
+        setKind(transaction.kind ?? 'despesa')
         setOperationType(detectOperationType(transaction.amount))
         setPaymentMethod((transaction as any).paymentMethod ?? 'credito')
         setInstallmentTotal(transaction.installmentTotal ?? 1)
@@ -104,6 +113,8 @@ export default function TransactionModal({
         setCategoryId('')
         // Pré-selecionar o dependente principal se existir
         setDependentId(mainDependent?.id ?? '')
+        setAccountId('')
+        setKind('despesa')
         setOperationType('despesa')
         setPaymentMethod('credito')
         setInstallmentTotal(1)
@@ -163,6 +174,8 @@ export default function TransactionModal({
         amount: cents,
         categoryId,
         dependentId: dependentId || null,
+        accountId: accountId || null,
+        kind,
         operationType,
         installmentTotal,
         paymentMethod,
@@ -205,7 +218,41 @@ export default function TransactionModal({
         )}
 
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-          {/* Tipo de Operação */}
+          {/* Despesa x Receita */}
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">Natureza</span>
+            <div className="grid grid-cols-2 gap-2" role="group" aria-label="Natureza da transação">
+              <button
+                type="button"
+                onClick={() => setKind('despesa')}
+                aria-pressed={kind === 'despesa'}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                  kind === 'despesa'
+                    ? 'border-red-400 bg-red-50 text-red-700 shadow-sm'
+                    : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <TrendingDown className="h-4 w-4" />
+                Despesa
+              </button>
+              <button
+                type="button"
+                onClick={() => { setKind('receita'); setOperationType('despesa') }}
+                aria-pressed={kind === 'receita'}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
+                  kind === 'receita'
+                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700 shadow-sm'
+                    : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Receita
+              </button>
+            </div>
+          </div>
+
+          {/* Tipo de Operação — só para despesas */}
+          {kind === 'despesa' && (
           <div>
             <span className="mb-1.5 block text-sm font-medium">Tipo de operação</span>
             <div className="grid grid-cols-2 gap-2" role="group" aria-label="Tipo de operação">
@@ -237,6 +284,7 @@ export default function TransactionModal({
               </button>
             </div>
           </div>
+          )}
 
           {/* Data */}
           <div>
@@ -339,6 +387,24 @@ export default function TransactionModal({
                   <option key={dep.id} value={dep.id}>
                     {dep.name}{dep.isMain ? ' ⭐' : ''}
                   </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Conta / carteira */}
+          {accounts.length > 0 && (
+            <div>
+              <label htmlFor="tx-account" className="mb-1 block text-sm font-medium">Conta</label>
+              <select
+                id="tx-account"
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Nenhuma</option>
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>{acc.name}</option>
                 ))}
               </select>
             </div>

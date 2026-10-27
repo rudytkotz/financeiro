@@ -22,6 +22,7 @@ const sampleTransaction: Transaction = {
   installmentCurrent: null,
   installmentTotal: null,
   accountId: null,
+  kind: 'despesa',
   createdAt: '2024-03-15T10:00:00Z',
   updatedAt: '2024-03-15T10:00:00Z',
 }
@@ -115,6 +116,8 @@ describe('TransactionModal', () => {
         amount: 2550,
         categoryId: 'cat-1',
         dependentId: null,
+        accountId: null,
+        kind: 'despesa',
         operationType: 'despesa',
         installmentTotal: 1,
         paymentMethod: 'credito',

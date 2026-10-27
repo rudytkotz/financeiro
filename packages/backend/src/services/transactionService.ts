@@ -31,6 +31,7 @@ export interface CreateTransactionData {
   dependentId?: string | null
   accountId?: string | null
   operationType?: 'despesa' | 'reembolso'
+  kind?: 'despesa' | 'receita'  // receita = entrada de dinheiro
   installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
   paymentMethod?: string
 }
@@ -134,9 +135,13 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
  */
 export async function createTransaction(data: CreateTransactionData, userId?: string): Promise<Transaction> {
   const { date, description, categoryId, operationType, paymentMethod } = data
+  const kind = data.kind === 'receita' ? 'receita' : 'despesa'
   let { amount } = data
   // Aplicar sinal baseado no tipo de operação
-  if (operationType === 'reembolso') {
+  if (kind === 'receita') {
+    // Receita: valor sempre positivo (representa entrada)
+    amount = Math.abs(amount)
+  } else if (operationType === 'reembolso') {
     // Reembolso: garantir que o valor seja negativo
     amount = -Math.abs(amount)
   } else {
@@ -178,8 +183,8 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
     throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
   }
 
-  // Validar installmentTotal (se fornecido)
-  const parsedInstallments = data.installmentTotal ?? 1
+  // Validar installmentTotal (se fornecido). Receita é sempre à vista.
+  const parsedInstallments = kind === 'receita' ? 1 : (data.installmentTotal ?? 1)
   if (!Number.isInteger(parsedInstallments) || parsedInstallments < 1 || parsedInstallments > 24) {
     throw makeError(422, 'VALIDATION_ERROR', 'O número de parcelas deve ser entre 1 e 24.')
   }
@@ -196,6 +201,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
         categoryId,
         dependentId: data.dependentId ?? null,
         accountId: data.accountId ?? null,
+        kind,
         source: 'manual',
         importId: null,
         referenceMonth: date.substring(0, 7),

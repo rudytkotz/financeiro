@@ -18,6 +18,7 @@ describe('shared types', () => {
       installmentCurrent: null,
       installmentTotal: null,
       accountId: null,
+      kind: 'despesa',
       createdAt: '2024-01-01T00:00:00Z',
       updatedAt: '2024-01-01T00:00:00Z',
     }
@@ -38,6 +39,8 @@ describe('shared types', () => {
             totalExpenses: userExpenses,
             totalUserExpenses: userExpenses,
             incomeAmount: income,
+            transactionIncome: 0,
+            totalIncome: income,
             balance,
             expensesByCategory: [],
             expensesByDependent: [],

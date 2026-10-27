@@ -14,6 +14,7 @@ export interface Transaction {
   installmentCurrent: number | null
   installmentTotal: number | null
   accountId: string | null
+  kind: 'despesa' | 'receita'
   createdAt: string
   updatedAt: string
 }
@@ -295,6 +296,8 @@ export interface DashboardSummary {
   totalExpenses: number
   totalUserExpenses: number
   incomeAmount: number | null
+  transactionIncome: number
+  totalIncome: number
   balance: number | null
   expensesByCategory: Array<{
     categoryId: string
@@ -330,8 +333,10 @@ export interface CreateTransactionPayload {
   amount: number         // centavos (valor absoluto — o sinal é definido por operationType)
   categoryId: string
   dependentId?: string | null  // dependente associado à transação
+  accountId?: string | null     // conta/carteira associada
   paymentMethod?: string        // 'credito' | 'pix' | 'debito' | 'dinheiro' | 'outros'
   operationType?: 'despesa' | 'reembolso'  // 'despesa' = positivo (padrão); 'reembolso' = negativo
+  kind?: 'despesa' | 'receita'             // receita = entrada de dinheiro
   installmentTotal?: number                // 1 ou undefined = à vista; 2–24 = parcelado
 }
 

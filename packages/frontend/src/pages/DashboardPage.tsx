@@ -63,6 +63,7 @@ export default function DashboardPage() {
 
   // Valores seguros contra null vindos da API
   const incomeAmount = dashboard?.incomeAmount ?? 0
+  const transactionIncome = dashboard?.transactionIncome ?? 0
   const balance = dashboard?.balance ?? 0
 
   const hasNoData =
@@ -152,7 +153,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Renda */}
-            <IncomeCard incomeAmount={incomeAmount} month={month} />
+            <IncomeCard incomeAmount={incomeAmount} transactionIncome={transactionIncome} month={month} />
 
             {/* Saldo */}
             <div className={`rounded-xl border border-l-4 bg-white p-5 shadow-sm ${balance >= 0 ? 'border-l-emerald-400' : 'border-l-red-400'}`}>
@@ -394,7 +395,7 @@ function InvestmentsOverview({ portfolio }: { portfolio?: PortfolioSummary }) {
 // Inline editable income card
 // ---------------------------------------------------------------------------
 
-function IncomeCard({ incomeAmount, month }: { incomeAmount: number; month: string }) {
+function IncomeCard({ incomeAmount, transactionIncome, month }: { incomeAmount: number; transactionIncome: number; month: string }) {
   const [display, setDisplay] = useState(() => (incomeAmount / 100).toFixed(2).replace('.', ','))
   const setIncomeMutation = useSetIncome()
 
@@ -436,7 +437,12 @@ function IncomeCard({ incomeAmount, month }: { incomeAmount: number; month: stri
           aria-label="Valor da renda"
         />
       </div>
-      <p className="mt-1 text-[10px] text-gray-400">Clique para editar</p>
+      <p className="mt-1 text-[10px] text-gray-400">Renda fixa — clique para editar</p>
+      {transactionIncome > 0 && (
+        <p className="mt-1 text-xs text-emerald-600">
+          + {formatCurrency(transactionIncome)} em receitas lançadas
+        </p>
+      )}
     </div>
   )
 }

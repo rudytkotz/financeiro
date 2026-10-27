@@ -29,7 +29,9 @@ export interface DashboardSummary {
   month: string
   totalExpenses: number
   totalUserExpenses: number
-  incomeAmount: number | null
+  incomeAmount: number | null       // renda fixa cadastrada no mês (tabela income)
+  transactionIncome: number         // receitas lançadas como transações no mês
+  totalIncome: number               // incomeAmount + transactionIncome
   balance: number | null
   expensesByCategory: ExpenseByCategory[]
   expensesByDependent: ExpenseByDependent[]
@@ -79,6 +81,8 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
       totalExpenses: 0,
       totalUserExpenses: 0,
       incomeAmount: null,
+      transactionIncome: 0,
+      totalIncome: 0,
       balance: null,
       expensesByCategory: [],
       expensesByDependent: [],
@@ -88,9 +92,10 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
 
   const monthCond = monthCondition(month)
   const userCond = userId ? sql`(${transactions.userId} = ${userId} OR ${transactions.userId} IS NULL)` : sql`1=1`
-  const fullCond = sql`${monthCond} AND ${userCond}`
+  // Condição base para DESPESAS (exclui receitas)
+  const fullCond = sql`${monthCond} AND ${userCond} AND ${transactions.kind} = 'despesa'`
 
-  // 1. Total geral de gastos (todas as transações do mês)
+  // 1. Total geral de gastos (apenas despesas do mês)
   const [totalResult] = await db
     .select({
       total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
@@ -110,7 +115,17 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
 
   const totalUserExpenses = Number(userExpensesResult.total)
 
-  // 3. Renda do mês (default 0 se não cadastrada)
+  // 2b. Receitas lançadas como transação no mês
+  const [incomeTxResult] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(sql`${monthCond} AND ${userCond} AND ${transactions.kind} = 'receita'`)
+
+  const transactionIncome = Number(incomeTxResult.total)
+
+  // 3. Renda fixa do mês (tabela income; default 0 se não cadastrada)
   const [incomeRecord] = await db
     .select()
     .from(income)
@@ -118,7 +133,8 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
     .limit(1)
 
   const incomeAmount = incomeRecord ? incomeRecord.amount : 0
-  const balance = incomeAmount - totalExpenses
+  const totalIncome = incomeAmount + transactionIncome
+  const balance = totalIncome - totalExpenses
 
   // 4. Gastos por categoria (com filtros opcionais de dependente e forma de pagamento)
   // Monta condições extras de forma segura usando Drizzle ORM
@@ -197,6 +213,8 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
     totalExpenses,
     totalUserExpenses,
     incomeAmount,
+    transactionIncome,
+    totalIncome,
     balance,
     expensesByCategory,
     expensesByDependent,

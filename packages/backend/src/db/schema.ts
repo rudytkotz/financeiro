@@ -93,6 +93,8 @@ export const transactions = pgTable(
     categoryId: uuid('category_id').references(() => categories.id), // nullable — preenchido pelo usuário
     dependentId: uuid('dependent_id').references(() => dependents.id), // nullable
     source: varchar('source', { length: 10 }).notNull(), // 'csv' | 'manual'
+    // 'despesa' (saída) | 'receita' (entrada). Default despesa para compatibilidade.
+    kind: varchar('kind', { length: 10 }).notNull().default('despesa'),
     importId: uuid('import_id').references(() => imports.id), // nullable
     portador: varchar('portador', { length: 100 }), // nome do portador do cartão (nullable)
     paymentMethod: varchar('payment_method', { length: 20 }).notNull().default('credito'), // credito | pix | debito | dinheiro | outros

@@ -23,6 +23,7 @@ export const createTransactionSchema = z.object({
   dependentId: uuid.nullable().optional(),
   accountId: uuid.nullable().optional(),
   operationType: operationType.optional(),
+  kind: z.enum(['despesa', 'receita']).optional(),
   installmentTotal: z.number().int().min(1).max(24).optional(),
   paymentMethod: paymentMethod.optional(),
 })
