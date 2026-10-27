@@ -363,6 +363,31 @@ export interface SetIncomePayload {
   amount: number         // centavos
 }
 
+// Orçamento por categoria
+export interface BudgetRow {
+  id: string | null
+  categoryId: string
+  categoryName: string
+  categoryColor: string | null
+  amount: number         // teto planejado (centavos)
+  spent: number          // gasto realizado (centavos)
+  remaining: number      // amount - spent
+  percentage: number     // spent / amount * 100
+}
+
+export interface BudgetSummary {
+  month: string
+  totalBudget: number
+  totalSpent: number
+  rows: BudgetRow[]
+}
+
+export interface SetBudgetPayload {
+  categoryId: string
+  month: string
+  amount: number         // centavos (0 remove o orçamento)
+}
+
 export interface SaveImportPayload {
   transactions: Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>[]
   force?: boolean

@@ -37,14 +37,16 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Modal de transação com alternância Despesa/Receita e seletor de conta
 - Observação: ainda não há categorias específicas de receita (reaproveita as existentes)
 
+### Fase 3 — Orçamento por categoria (#3)
+- Tabela `budgets` (teto por categoria/mês/usuário) + migration `0016_budgets.sql`
+- Service com planejado vs. realizado e % de uso por categoria
+- Rotas `GET/PUT /api/budgets` com validação Zod
+- Aba "Orçamento" dentro de Transações: barra de progresso, alerta ao chegar a 80% (amarelo) e ao estourar (vermelho)
+- Navegação por mês; definir teto inline por categoria
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 3 — Orçamento por categoria (#3)
-- [ ] Tabela `budgets` (teto por categoria por mês)
-- [ ] Acompanhamento planejado vs. realizado
-- [ ] Alerta visual ao se aproximar/estourar o teto
 
 ### Fase 4 — Recorrentes e contas a pagar/receber (#4)
 - [ ] Tabela `recurring_transactions`

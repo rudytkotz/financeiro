@@ -283,6 +283,26 @@ export const allocationTargets = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// budgets — orçamento (teto) por categoria por mês
+// ---------------------------------------------------------------------------
+export const budgets = pgTable(
+  'budgets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    categoryId: uuid('category_id').notNull().references(() => categories.id, { onDelete: 'cascade' }),
+    month: varchar('month', { length: 7 }).notNull(), // YYYY-MM
+    // Teto planejado em centavos
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    // Um orçamento por categoria/mês/usuário
+    uniqueIdx: uniqueIndex('budgets_category_month_user_idx').on(table.categoryId, table.month, table.userId),
+    userMonthIdx: index('budgets_user_month_idx').on(table.userId, table.month),
+  })
+)
+
+// ---------------------------------------------------------------------------
 // telegram_links (vinculo chat_id → user)
 // ---------------------------------------------------------------------------
 export const telegramLinks = pgTable('telegram_links', {
@@ -330,3 +350,6 @@ export type NewPortfolioSnapshot = typeof portfolioSnapshots.$inferInsert
 
 export type AllocationTarget = typeof allocationTargets.$inferSelect
 export type NewAllocationTarget = typeof allocationTargets.$inferInsert
+
+export type Budget = typeof budgets.$inferSelect
+export type NewBudget = typeof budgets.$inferInsert

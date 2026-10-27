@@ -18,10 +18,11 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
   Search, Filter, Plus, X, ChevronLeft, ChevronRight,
-  ArrowLeftRight, Upload, Tag,
+  ArrowLeftRight, Upload, Tag, Target,
 } from 'lucide-react'
 import { ImportSection } from './ImportPage'
 import { CategoriesSection } from './CategoriesPage'
+import BudgetsSection from './BudgetsSection'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -520,10 +521,11 @@ function TransactionsSection() {
 // ===========================================================================
 // PAGE WRAPPER — abas: Transações · Importar · Categorias
 // ===========================================================================
-type TabKey = 'transactions' | 'import' | 'categories'
+type TabKey = 'transactions' | 'budget' | 'import' | 'categories'
 
 const TABS: { key: TabKey; label: string; icon: typeof ArrowLeftRight }[] = [
   { key: 'transactions', label: 'Transações', icon: ArrowLeftRight },
+  { key: 'budget', label: 'Orçamento', icon: Target },
   { key: 'import', label: 'Importar', icon: Upload },
   { key: 'categories', label: 'Categorias', icon: Tag },
 ]
@@ -555,6 +557,7 @@ export default function TransactionsPage() {
       </div>
 
       {tab === 'transactions' && <TransactionsSection />}
+      {tab === 'budget' && <BudgetsSection />}
       {tab === 'import' && <ImportSection />}
       {tab === 'categories' && <CategoriesSection />}
     </div>
