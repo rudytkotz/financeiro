@@ -3,6 +3,8 @@ import { eq, sql, and } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'
 import { users, transactions, categories, dependents, imports, income } from '../db/schema.js'
+import { parse } from '../lib/validation.js'
+import { createUserSchema, idParamSchema } from '../lib/schemas.js'
 
 const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook('onRequest', async (request, reply) => {
@@ -152,60 +154,68 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
 
   // POST /api/admin/users
   app.post('/api/admin/users', async (request, reply) => {
-    const { username, password } = request.body as { username: string; password: string }
-    if (!username || !password) return reply.status(422).send({ message: 'Username e password são obrigatórios.' })
+    const { username, password } = parse(createUserSchema, request.body)
 
     const [existing] = await db.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = lower(${username.trim()})`).limit(1)
-    if (existing) return reply.status(409).send({ message: 'Usuário já existe.' })
+    if (existing) return reply.status(409).send({ code: 'DUPLICATE_USER', message: 'Usuário já existe.' })
 
     const passwordHash = await bcrypt.hash(password, 10)
     const [user] = await db.insert(users).values({ username: username.trim(), passwordHash, isAdmin: false }).returning()
     return reply.status(201).send({ id: user.id, username: user.username, isAdmin: user.isAdmin })
   })
 
-  // DELETE /api/admin/users/:id — delete user and all their data
+  // DELETE /api/admin/users/:id — delete user and all their data (atômico)
   app.delete('/api/admin/users/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = parse(idParamSchema, request.params)
     const [target] = await db.select().from(users).where(eq(users.id, id)).limit(1)
-    if (!target) return reply.status(404).send({ message: 'Usuário não encontrado.' })
-    if (target.isAdmin) return reply.status(422).send({ message: 'Não é possível remover um administrador.' })
+    if (!target) return reply.status(404).send({ code: 'NOT_FOUND', message: 'Usuário não encontrado.' })
+    if (target.isAdmin) return reply.status(422).send({ code: 'IS_ADMIN', message: 'Não é possível remover um administrador.' })
 
-    await db.delete(transactions).where(eq(transactions.userId, id))
-    await db.delete(imports).where(eq(imports.userId, id))
-    await db.delete(income).where(eq(income.userId, id))
-    await db.delete(categories).where(eq(categories.userId, id))
-    await db.delete(dependents).where(eq(dependents.userId, id))
-    await db.delete(users).where(eq(users.id, id))
+    // Tudo em uma transação: ou apaga tudo, ou nada (evita estado parcial).
+    await db.transaction(async (tx) => {
+      await tx.delete(transactions).where(eq(transactions.userId, id))
+      await tx.delete(imports).where(eq(imports.userId, id))
+      await tx.delete(income).where(eq(income.userId, id))
+      await tx.delete(categories).where(eq(categories.userId, id))
+      await tx.delete(dependents).where(eq(dependents.userId, id))
+      await tx.delete(users).where(eq(users.id, id))
+    })
     return reply.status(204).send()
   })
 
   // DELETE /api/admin/users/:id/data — delete all data of a user (keep user account)
   app.delete('/api/admin/users/:id/data', async (request, reply) => {
-    const { id } = request.params as { id: string }
+    const { id } = parse(idParamSchema, request.params)
     const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1)
-    if (!target) return reply.status(404).send({ message: 'Usuário não encontrado.' })
+    if (!target) return reply.status(404).send({ code: 'NOT_FOUND', message: 'Usuário não encontrado.' })
 
-    await db.delete(transactions).where(eq(transactions.userId, id))
-    await db.delete(imports).where(eq(imports.userId, id))
-    await db.delete(income).where(eq(income.userId, id))
-    // Keep categories and dependents as they are reusable
+    await db.transaction(async (tx) => {
+      await tx.delete(transactions).where(eq(transactions.userId, id))
+      await tx.delete(imports).where(eq(imports.userId, id))
+      await tx.delete(income).where(eq(income.userId, id))
+      // Keep categories and dependents as they are reusable
+    })
     return reply.status(200).send({ message: 'Dados do usuário apagados.' })
   })
 
   // DELETE /api/admin/data — delete ALL data from all users (nuclear option)
   app.delete('/api/admin/data', async (_request, reply) => {
-    await db.delete(transactions)
-    await db.delete(imports)
-    await db.delete(income)
-    await db.delete(categories).where(sql`${categories.isDefault} = false`)
-    await db.delete(dependents)
+    await db.transaction(async (tx) => {
+      await tx.delete(transactions)
+      await tx.delete(imports)
+      await tx.delete(income)
+      await tx.delete(categories).where(sql`${categories.isDefault} = false`)
+      await tx.delete(dependents)
+    })
     return reply.status(200).send({ message: 'Todos os dados foram apagados.' })
   })
 
   // DELETE /api/admin/transactions — delete only all transactions and imports
   app.delete('/api/admin/transactions', async (_request, reply) => {
-    await db.delete(transactions)
-    await db.delete(imports)
+    await db.transaction(async (tx) => {
+      await tx.delete(transactions)
+      await tx.delete(imports)
+    })
     return reply.status(200).send({ message: 'Todas as transações foram apagadas.' })
   })
 

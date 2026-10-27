@@ -9,12 +9,8 @@ import {
   insertStandaloneTransactions,
   filterDuplicateInstallments,
   type ImportTransaction,
-  type ServiceError,
 } from '../services/importService.js'
-
-function getUserId(request: any): string {
-  return (request.user as { id: string }).id
-}
+import { getUserId } from '../lib/auth.js'
 
 // ---------------------------------------------------------------------------
 // JSON Schema for POST /api/imports body validation
@@ -52,16 +48,6 @@ const postImportsSchema = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function isServiceError(err: unknown): err is ServiceError {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'statusCode' in err &&
-    'code' in err &&
-    'message' in err
-  )
-}
 
 /**
  * Offsets a YYYY-MM string by N months (positive = future, negative = past).
@@ -174,7 +160,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       })
     }
 
-    try {
+    {
       // 2. Resolve portador names to dependent IDs (auto-create if needed)
       const portadorNames = valid
         .map((t) => t.portador)
@@ -267,11 +253,6 @@ const importRoutes: FastifyPluginAsync = async (app) => {
 
       // 8. Retornar 201 com o registro de importação
       return reply.status(201).send(importRecord)
-    } catch (err) {
-      if (isServiceError(err)) {
-        return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      }
-      throw err
     }
   })
 

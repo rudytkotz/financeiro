@@ -18,9 +18,14 @@ const registerSchema = {
 
 const loginSchema = registerSchema
 
+// Limite mais rígido para rotas de autenticação (anti brute-force)
+const authRateLimit = {
+  config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+}
+
 const authRoutes: FastifyPluginAsync = async (app) => {
   // POST /api/auth/register
-  app.post('/api/auth/register', { schema: registerSchema }, async (request, reply) => {
+  app.post('/api/auth/register', { ...authRateLimit, schema: registerSchema }, async (request, reply) => {
     const { username, password } = request.body as { username: string; password: string }
 
     // Check duplicate
@@ -45,7 +50,7 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // POST /api/auth/login
-  app.post('/api/auth/login', { schema: loginSchema }, async (request, reply) => {
+  app.post('/api/auth/login', { ...authRateLimit, schema: loginSchema }, async (request, reply) => {
     const { username, password } = request.body as { username: string; password: string }
 
     const [user] = await db

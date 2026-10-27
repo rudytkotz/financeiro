@@ -96,7 +96,8 @@ function TransactionsSection() {
   }, [month, categoryId])
 
   const { data: transactionsData, isLoading } = useTransactions(filterParams)
-  const rawTransactions = transactionsData?.transactions ?? []
+  // Estabiliza a referência do array para não desestabilizar os useMemo abaixo
+  const rawTransactions = useMemo(() => transactionsData?.transactions ?? [], [transactionsData])
   const { data: categories } = useCategories()
   const { data: dependents } = useDependents()
 

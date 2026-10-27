@@ -46,7 +46,7 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(getCurrentMonth)
   const [catDependentId, setCatDependentId] = useState('')
   const [catPaymentMethod, setCatPaymentMethod] = useState('')
-  const { data: dashboard, isLoading } = useDashboard({
+  const { data: dashboard, isLoading, isError, refetch } = useDashboard({
     month,
     dependentId: catDependentId || undefined,
     paymentMethod: catPaymentMethod || undefined,
@@ -89,7 +89,19 @@ export default function DashboardPage() {
 
       {isLoading && <p className="text-gray-500">Carregando...</p>}
 
-      {hasNoData && !isLoading && (
+      {isError && !isLoading && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>Não foi possível carregar o painel. Verifique sua conexão e tente novamente.</span>
+          <button
+            onClick={() => refetch()}
+            className="ml-3 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {hasNoData && !isLoading && !isError && (
         <p className="text-gray-500">Nenhum dado encontrado para este período.</p>
       )}
 

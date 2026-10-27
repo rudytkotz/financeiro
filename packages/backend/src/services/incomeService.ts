@@ -2,16 +2,9 @@ import { eq, and, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { income } from '../db/schema.js'
 import type { Income } from '../db/schema.js'
+import { makeError, type ServiceError } from '../lib/errors.js'
 
-export interface ServiceError {
-  statusCode: number
-  code: string
-  message: string
-}
-
-function makeError(statusCode: number, code: string, message: string): ServiceError {
-  return { statusCode, code, message }
-}
+export type { ServiceError }
 
 export async function getIncome(month: string, userId: string): Promise<Income | null> {
   // Try user-specific first

@@ -80,9 +80,6 @@ const transactionsListArb = fc.array(transactionArb, { minLength: 0, maxLength: 
 /** Generate a valid income amount (centavos, positive) */
 const incomeAmountArb = fc.integer({ min: 1, max: 99999999999 })
 
-/** Generate income: either a positive amount or null (no income registered) */
-const incomeOrNullArb = fc.option(incomeAmountArb, { nil: null })
-
 // ---------------------------------------------------------------------------
 // Property Tests
 // ---------------------------------------------------------------------------

@@ -1,20 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { getDashboard } from '../services/dashboardService.js'
-
-function getUserId(request: any): string {
-  return (request.user as { id: string }).id
-}
+import { getUserId } from '../lib/auth.js'
+import { parse } from '../lib/validation.js'
+import { dashboardQuerySchema } from '../lib/schemas.js'
 
 const dashboardRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/dashboard', async (request, reply) => {
-    const { month, dependentId, paymentMethod } = request.query as {
-      month?: string
-      dependentId?: string   // 'none' = sem dependente (pessoal), uuid = filtrar por dependente
-      paymentMethod?: string
-    }
-    if (!month) {
-      return reply.status(422).send({ code: 'VALIDATION_ERROR', message: 'Parâmetro month obrigatório.' })
-    }
+    const { month, dependentId, paymentMethod } = parse(dashboardQuerySchema, request.query)
 
     // Traduz 'none' para null (transações sem dependente)
     const resolvedDependentId = dependentId === 'none' ? null : dependentId

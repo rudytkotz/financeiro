@@ -1,13 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { listCategories, createCategory, renameCategory, deleteCategory, type ServiceError } from '../services/categoryService.js'
-
-function isServiceError(err: unknown): err is ServiceError {
-  return typeof err === 'object' && err !== null && 'statusCode' in err && 'code' in err && 'message' in err
-}
-
-function getUserId(request: any): string {
-  return (request.user as { id: string }).id
-}
+import { listCategories, createCategory, renameCategory, deleteCategory } from '../services/categoryService.js'
+import { getUserId } from '../lib/auth.js'
+import { parse } from '../lib/validation.js'
+import { createCategorySchema, updateCategorySchema, idParamSchema } from '../lib/schemas.js'
 
 const categoryRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/categories', async (request, reply) => {
@@ -16,37 +11,22 @@ const categoryRoutes: FastifyPluginAsync = async (app) => {
   })
 
   app.post('/api/categories', async (request, reply) => {
-    const { name, color } = request.body as { name: string; color?: string | null }
-    try {
-      const category = await createCategory(name, getUserId(request), color)
-      return reply.status(201).send(category)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const { name, color } = parse(createCategorySchema, request.body)
+    const category = await createCategory(name, getUserId(request), color)
+    return reply.status(201).send(category)
   })
 
   app.put('/api/categories/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    const { name, color } = request.body as { name: string; color?: string | null }
-    try {
-      const category = await renameCategory(id, name, getUserId(request), color)
-      return reply.status(200).send(category)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const { id } = parse(idParamSchema, request.params)
+    const { name, color } = parse(updateCategorySchema, request.body)
+    const category = await renameCategory(id, name, getUserId(request), color)
+    return reply.status(200).send(category)
   })
 
   app.delete('/api/categories/:id', async (request, reply) => {
-    const { id } = request.params as { id: string }
-    try {
-      await deleteCategory(id, getUserId(request))
-      return reply.status(204).send()
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const { id } = parse(idParamSchema, request.params)
+    await deleteCategory(id, getUserId(request))
+    return reply.status(204).send()
   })
 }
 

@@ -14,7 +14,6 @@ import {
   getPortfolioSummary,
   getAllocation,
   getEvolution,
-  type ServiceError,
   type CreateRvData,
   type CreateRfData,
   type CreateTxData,
@@ -39,139 +38,102 @@ import {
   type UpdateDividendData,
   type SetTargetData,
 } from '../services/investmentAdvancedService.js'
+import { getUserId } from '../lib/auth.js'
 
-function isServiceError(err: unknown): err is ServiceError {
-  return typeof err === 'object' && err !== null && 'statusCode' in err && 'code' in err && 'message' in err
-}
-
-function getUserId(request: any): string {
-  return (request.user as { id: string }).id
-}
+// Nota: a validação detalhada dos payloads de investimento é feita nos services
+// (makeError 422). Erros são convertidos em resposta pelo error handler global.
 
 const investmentRoutes: FastifyPluginAsync = async (app) => {
   // Lista todos os investimentos (RF + RV, sem cálculo)
   app.get('/api/investments', async (request, reply) => {
-    const list = await listInvestments(getUserId(request))
-    return reply.send(list)
+    return reply.send(await listInvestments(getUserId(request)))
   })
 
   // Posições de renda variável (com preço médio + cotação)
   app.get('/api/investments/positions', async (request, reply) => {
-    const positions = await getRvPositions(getUserId(request))
-    return reply.send(positions)
+    return reply.send(await getRvPositions(getUserId(request)))
   })
 
   // Resumo consolidado da carteira
   app.get('/api/investments/summary', async (request, reply) => {
-    const summary = await getPortfolioSummary(getUserId(request))
-    return reply.send(summary)
+    return reply.send(await getPortfolioSummary(getUserId(request)))
   })
 
   // Posições de renda fixa (com valor atualizado estimado via CDI)
   app.get('/api/investments/rf-positions', async (request, reply) => {
-    const positions = await getRfPositions(getUserId(request))
-    return reply.send(positions)
+    return reply.send(await getRfPositions(getUserId(request)))
   })
 
   // Alocação da carteira (para gráfico de pizza)
   app.get('/api/investments/allocation', async (request, reply) => {
-    const allocation = await getAllocation(getUserId(request))
-    return reply.send(allocation)
+    return reply.send(await getAllocation(getUserId(request)))
   })
 
   // Evolução do patrimônio vs CDI (para gráfico de linha)
   app.get('/api/investments/evolution', async (request, reply) => {
-    const evolution = await getEvolution(getUserId(request))
-    return reply.send(evolution)
+    return reply.send(await getEvolution(getUserId(request)))
   })
 
   // ---- Proventos ----
   app.get('/api/investments/dividends', async (request, reply) => {
-    const summary = await getDividendSummary(getUserId(request))
-    return reply.send(summary)
+    return reply.send(await getDividendSummary(getUserId(request)))
   })
 
   app.post('/api/investments/dividends', async (request, reply) => {
-    try {
-      const div = await addDividend(request.body as CreateDividendData, getUserId(request))
-      return reply.status(201).send(div)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const div = await addDividend(request.body as CreateDividendData, getUserId(request))
+    return reply.status(201).send(div)
   })
 
   app.put('/api/investments/dividends/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      const div = await updateDividend(id, request.body as UpdateDividendData, getUserId(request))
-      return reply.send(div)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const div = await updateDividend(id, request.body as UpdateDividendData, getUserId(request))
+    return reply.send(div)
   })
 
   app.delete('/api/investments/dividends/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await deleteDividend(id, getUserId(request))
-      return reply.status(204).send()
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    await deleteDividend(id, getUserId(request))
+    return reply.status(204).send()
   })
 
   // Sugestão de dividendos do Yahoo (valor por cota — usuário confirma)
   app.get('/api/investments/dividend-history/:ticker', async (request, reply) => {
     const { ticker } = request.params as { ticker: string }
-    const history = await getDividendHistory(ticker)
-    return reply.send(history)
+    return reply.send(await getDividendHistory(ticker))
   })
 
   // ---- Alertas de vencimento ----
   app.get('/api/investments/maturity-alerts', async (request, reply) => {
-    const alerts = await getMaturityAlerts(getUserId(request))
-    return reply.send(alerts)
+    return reply.send(await getMaturityAlerts(getUserId(request)))
   })
 
   // ---- Snapshots / histórico de patrimônio ----
   app.get('/api/investments/snapshots', async (request, reply) => {
     // Grava o snapshot do mês atual e retorna o histórico
     await recordSnapshot(getUserId(request))
-    const snapshots = await getSnapshots(getUserId(request))
-    return reply.send(snapshots)
+    return reply.send(await getSnapshots(getUserId(request)))
   })
 
   // ---- Rebalanceamento ----
   app.get('/api/investments/targets', async (request, reply) => {
-    const targets = await getAllocationTargets(getUserId(request))
-    return reply.send(targets)
+    return reply.send(await getAllocationTargets(getUserId(request)))
   })
 
   app.put('/api/investments/targets', async (request, reply) => {
-    try {
-      const { targets } = request.body as { targets: SetTargetData[] }
-      const saved = await setAllocationTargets(targets ?? [], getUserId(request))
-      return reply.send(saved)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const { targets } = request.body as { targets: SetTargetData[] }
+    const saved = await setAllocationTargets(targets ?? [], getUserId(request))
+    return reply.send(saved)
   })
 
   app.get('/api/investments/rebalance', async (request, reply) => {
-    const rebalance = await getRebalance(getUserId(request))
-    return reply.send(rebalance)
+    return reply.send(await getRebalance(getUserId(request)))
   })
 
   // ---- Relatório de Imposto de Renda ----
   app.get('/api/investments/tax-report', async (request, reply) => {
     const { year } = request.query as { year?: string }
     const targetYear = year && /^\d{4}$/.test(year) ? parseInt(year, 10) : new Date().getFullYear()
-    const report = await getTaxReport(getUserId(request), targetYear)
-    return reply.send(report)
+    return reply.send(await getTaxReport(getUserId(request), targetYear))
   })
 
   // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar)
@@ -184,96 +146,56 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
 
   // Criar renda variável
   app.post('/api/investments/rv', async (request, reply) => {
-    try {
-      const inv = await createRvInvestment(request.body as CreateRvData, getUserId(request))
-      return reply.status(201).send(inv)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const inv = await createRvInvestment(request.body as CreateRvData, getUserId(request))
+    return reply.status(201).send(inv)
   })
 
   // Criar renda fixa
   app.post('/api/investments/rf', async (request, reply) => {
-    try {
-      const inv = await createRfInvestment(request.body as CreateRfData, getUserId(request))
-      return reply.status(201).send(inv)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const inv = await createRfInvestment(request.body as CreateRfData, getUserId(request))
+    return reply.status(201).send(inv)
   })
 
   // Editar renda variável
   app.put('/api/investments/rv/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      const inv = await updateRvInvestment(id, request.body as UpdateRvData, getUserId(request))
-      return reply.send(inv)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const inv = await updateRvInvestment(id, request.body as UpdateRvData, getUserId(request))
+    return reply.send(inv)
   })
 
   // Editar renda fixa
   app.put('/api/investments/rf/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      const inv = await updateRfInvestment(id, request.body as UpdateRfData, getUserId(request))
-      return reply.send(inv)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const inv = await updateRfInvestment(id, request.body as UpdateRfData, getUserId(request))
+    return reply.send(inv)
   })
 
   // Adicionar operação (compra/venda) a um investimento RV
   app.post('/api/investments/:id/transactions', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      const tx = await addTransaction(id, request.body as CreateTxData, getUserId(request))
-      return reply.status(201).send(tx)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const tx = await addTransaction(id, request.body as CreateTxData, getUserId(request))
+    return reply.status(201).send(tx)
   })
 
   // Editar operação
   app.put('/api/investments/transactions/:txId', async (request, reply) => {
     const { txId } = request.params as { txId: string }
-    try {
-      const tx = await updateTransaction(txId, request.body as UpdateTxData, getUserId(request))
-      return reply.send(tx)
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    const tx = await updateTransaction(txId, request.body as UpdateTxData, getUserId(request))
+    return reply.send(tx)
   })
 
   // Deletar operação
   app.delete('/api/investments/transactions/:txId', async (request, reply) => {
     const { txId } = request.params as { txId: string }
-    try {
-      await deleteTransaction(txId, getUserId(request))
-      return reply.status(204).send()
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    await deleteTransaction(txId, getUserId(request))
+    return reply.status(204).send()
   })
 
   // Deletar investimento
   app.delete('/api/investments/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-    try {
-      await deleteInvestment(id, getUserId(request))
-      return reply.status(204).send()
-    } catch (err) {
-      if (isServiceError(err)) return reply.status(err.statusCode).send({ code: err.code, message: err.message })
-      throw err
-    }
+    await deleteInvestment(id, getUserId(request))
+    return reply.status(204).send()
   })
 }
 

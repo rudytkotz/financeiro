@@ -2,20 +2,9 @@ import { eq, and, gte, lte, desc, or, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { transactions, categories, dependents, imports } from '../db/schema.js'
 import type { Transaction } from '../db/schema.js'
+import { makeError, type ServiceError } from '../lib/errors.js'
 
-// ---------------------------------------------------------------------------
-// Typed errors
-// ---------------------------------------------------------------------------
-
-export interface ServiceError {
-  statusCode: number
-  code: string
-  message: string
-}
-
-function makeError(statusCode: number, code: string, message: string): ServiceError {
-  return { statusCode, code, message }
-}
+export type { ServiceError }
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,7 +38,7 @@ export interface UpdateTransactionData {
   date?: string
   description?: string
   amount?: number
-  categoryId?: string
+  categoryId?: string | null
   dependentId?: string | null
   paymentMethod?: string
   operationType?: 'despesa' | 'reembolso'

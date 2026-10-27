@@ -4,16 +4,9 @@ import { investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes } from './quoteService.js'
 import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m, getIbovMonthlySeries } from './rateService.js'
+import { makeError, type ServiceError } from '../lib/errors.js'
 
-export interface ServiceError {
-  statusCode: number
-  code: string
-  message: string
-}
-
-function makeError(statusCode: number, code: string, message: string): ServiceError {
-  return { statusCode, code, message }
-}
+export type { ServiceError }
 
 // ---------------------------------------------------------------------------
 // Tipos de posição / resumo (computados)

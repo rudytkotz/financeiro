@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import type { Transaction, Category, Dependent, Income, DashboardSummary, CsvParseResult } from './types'
+import type { Transaction, DashboardSummary } from './types'
 
 describe('shared types', () => {
   it('Transaction shape is correct', () => {

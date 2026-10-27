@@ -2,16 +2,9 @@ import { eq, sql, and, asc, count } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { categories, transactions } from '../db/schema.js'
 import type { Category } from '../db/schema.js'
+import { makeError, type ServiceError } from '../lib/errors.js'
 
-export interface ServiceError {
-  statusCode: number
-  code: string
-  message: string
-}
-
-function makeError(statusCode: number, code: string, message: string): ServiceError {
-  return { statusCode, code, message }
-}
+export type { ServiceError }
 
 // ---------------------------------------------------------------------------
 // Default category names seeded for every new user

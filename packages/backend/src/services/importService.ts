@@ -2,20 +2,9 @@ import { eq, desc, sql, and, inArray } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { imports, transactions, dependents } from '../db/schema.js'
 import type { Import } from '../db/schema.js'
+import { makeError, type ServiceError } from '../lib/errors.js'
 
-// ---------------------------------------------------------------------------
-// Typed errors
-// ---------------------------------------------------------------------------
-
-export interface ServiceError {
-  statusCode: number
-  code: string
-  message: string
-}
-
-function makeError(statusCode: number, code: string, message: string): ServiceError {
-  return { statusCode, code, message }
-}
+export type { ServiceError }
 
 // ---------------------------------------------------------------------------
 // Types
