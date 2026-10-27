@@ -180,7 +180,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
   const [category] = await db
     .select({ id: categories.id })
     .from(categories)
-    .where(eq(categories.id, categoryId))
+    .where(userId ? and(eq(categories.id, categoryId), eq(categories.userId, userId)) : eq(categories.id, categoryId))
     .limit(1)
 
   if (!category) {
@@ -331,7 +331,7 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
       const [category] = await db
         .select({ id: categories.id })
         .from(categories)
-        .where(eq(categories.id, data.categoryId))
+        .where(userId ? and(eq(categories.id, data.categoryId), eq(categories.userId, userId)) : eq(categories.id, data.categoryId))
         .limit(1)
 
       if (!category) {
@@ -490,11 +490,15 @@ export async function associateDependent(
 ): Promise<{ transaction: Transaction } | { conflict: AssociateDependentConflict }> {
   const { dependentId, force } = data
 
-  // Buscar a transação
+  // Buscar a transação (restrita ao usuário; inclui legado sem userId)
+  const txWhere = userId
+    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    : eq(transactions.id, id)
+
   const [existing] = await db
     .select()
     .from(transactions)
-    .where(eq(transactions.id, id))
+    .where(txWhere)
     .limit(1)
 
   if (!existing) {
@@ -530,7 +534,10 @@ export async function associateDependent(
             and(
               sql`${transactions.id} != ${id}`,
               eq(transactions.description, existing.description),
-              eq(transactions.installmentTotal, existing.installmentTotal)
+              eq(transactions.installmentTotal, existing.installmentTotal),
+              userId
+                ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
+                : sql`1=1`
             )
           )
       }
@@ -593,7 +600,10 @@ export async function associateDependent(
           and(
             sql`${transactions.id} != ${id}`,
             eq(transactions.description, existing.description),
-            eq(transactions.installmentTotal, existing.installmentTotal)
+            eq(transactions.installmentTotal, existing.installmentTotal),
+            userId
+              ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
+              : sql`1=1`
           )
         )
     }

@@ -193,7 +193,7 @@ export async function deleteCategory(id: string, userId: string): Promise<void> 
   const [{ total }] = await db
     .select({ total: count() })
     .from(transactions)
-    .where(eq(transactions.categoryId, id))
+    .where(and(eq(transactions.categoryId, id), eq(transactions.userId, userId)))
 
   if (total > 0) throw makeError(409, 'HAS_TRANSACTIONS', 'Não é possível excluir uma categoria com transações vinculadas.')
 

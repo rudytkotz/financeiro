@@ -87,10 +87,19 @@ export async function setMainDependent(id: string | null, userId: string): Promi
 }
 
 export async function deleteDependent(id: string, userId: string): Promise<void> {
+  // Garantir que o dependente pertence ao usuário
+  const [dep] = await db
+    .select({ id: dependents.id })
+    .from(dependents)
+    .where(and(eq(dependents.id, id), eq(dependents.userId, userId)))
+    .limit(1)
+
+  if (!dep) throw makeError(404, 'NOT_FOUND', 'Dependente não encontrado.')
+
   const [{ total }] = await db
     .select({ total: count() })
     .from(transactions)
-    .where(eq(transactions.dependentId, id))
+    .where(and(eq(transactions.dependentId, id), eq(transactions.userId, userId)))
 
   if (total > 0) throw makeError(409, 'HAS_TRANSACTIONS', 'Não é possível remover este dependente pois existem transações vinculadas.')
 
