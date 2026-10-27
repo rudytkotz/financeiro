@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'
 import { users } from '../db/schema.js'

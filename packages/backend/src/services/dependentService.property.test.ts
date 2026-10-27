@@ -20,13 +20,14 @@ vi.mock('../db/index.js', () => ({
 }))
 
 vi.mock('../db/schema.js', () => ({
-  dependents: { id: 'id', name: 'name' },
-  transactions: { dependentId: 'dependent_id' },
+  dependents: { id: 'id', name: 'name', userId: 'user_id' },
+  transactions: { dependentId: 'dependent_id', userId: 'user_id' },
 }))
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a, b) => ({ op: 'eq', a, b })),
-  sql: vi.fn(),
+  and: vi.fn((...conds) => ({ op: 'and', conds })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: 'sql', strings, values })),
   count: vi.fn(() => 'count'),
 }))
 
@@ -34,6 +35,8 @@ vi.mock('drizzle-orm', () => ({
 // Import after mocks are set up
 // ---------------------------------------------------------------------------
 import { createDependent } from './dependentService'
+
+const TEST_USER = 'user-1'
 
 // ---------------------------------------------------------------------------
 // Property Test: P6 — Unicidade case-insensitive de dependentes
@@ -85,7 +88,7 @@ describe('Property 6: Unicidade case-insensitive (dependentes)', () => {
             ctx.log(`Base: "${baseName}", Variation: "${variation}"`)
 
             try {
-              await createDependent(variation)
+              await createDependent(variation, TEST_USER)
               // If we get here, the function did not throw — fail the property
               expect.fail(`Expected createDependent("${variation}") to throw 409 DUPLICATE_NAME`)
             } catch (err) {

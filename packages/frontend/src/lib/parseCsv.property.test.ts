@@ -59,7 +59,8 @@ const validCsvRecordsArb = fc.array(
 )
 
 /** All possible permutations of 3 columns */
-type ColumnOrder = ['date', 'description', 'value']
+type ColumnName = 'date' | 'description' | 'value'
+type ColumnOrder = [ColumnName, ColumnName, ColumnName]
 const allColumnOrders: ColumnOrder[] = [
   ['date', 'description', 'value'],
   ['date', 'value', 'description'],
@@ -170,7 +171,7 @@ describe('Property 1: Parser CSV é invariante à ordem de colunas e encoding', 
         columnOrderArb,
         headerVariantArb,
         encodingArb,
-        (records, order, headers, encoding) => {
+        (records, order, headers, _encoding) => {
           // Parse with UTF-8 (no BOM)
           const utf8Csv = buildCsv(records, order, headers, 'utf8')
           const utf8Result = parseCsvString(utf8Csv)

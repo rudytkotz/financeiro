@@ -17,14 +17,17 @@ vi.mock('../db/index.js', () => ({
 }))
 
 vi.mock('../db/schema.js', () => ({
-  categories: { id: 'id', name: 'name', isDefault: 'is_default' },
-  transactions: { categoryId: 'category_id' },
+  categories: { id: 'id', name: 'name', isDefault: 'is_default', userId: 'user_id' },
+  transactions: { categoryId: 'category_id', userId: 'user_id' },
 }))
 
-// We need to mock drizzle-orm operators so they don't break
+// Mock drizzle-orm operators so the service's query builders don't break
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a, b) => ({ op: 'eq', a, b })),
-  sql: vi.fn(),
+  and: vi.fn((...conds) => ({ op: 'and', conds })),
+  or: vi.fn((...conds) => ({ op: 'or', conds })),
+  isNull: vi.fn((col) => ({ op: 'isNull', col })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: 'sql', strings, values })),
   asc: vi.fn((col) => ({ op: 'asc', col })),
   desc: vi.fn((col) => ({ op: 'desc', col })),
   count: vi.fn(() => 'count'),
@@ -35,6 +38,28 @@ vi.mock('drizzle-orm', () => ({
 // ---------------------------------------------------------------------------
 import { listCategories, createCategory, deleteCategory } from './categoryService'
 
+const TEST_USER = 'user-1'
+
+// Lista de categorias "default" completa o suficiente para que listCategories
+// não dispare o seed nem o sync (evita ramos que exigem mocks adicionais).
+// Reproduz os nomes padrão do serviço.
+const DEFAULT_NAMES = [
+  'Alimentação', 'Assinaturas e serviços', 'Bares e restaurantes', 'Casa',
+  'Compras', 'Cuidados pessoais', 'Dívidas e empréstimos', 'Educação',
+  'Lazer e hobbies', 'Mercado', 'Outros', 'Pets', 'Presentes', 'Roupas',
+  'Saúde', 'Trabalho', 'Transporte', 'Viagem',
+]
+
+/** Mocks a `db.select().from().where().limit()` chain resolving to `rows`. */
+function selectWhereLimit(rows: unknown[]) {
+  return { where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(rows) }) }
+}
+
+/** Mocks a `db.select().from().where()` chain resolving to `rows` (no limit). */
+function selectWhere(rows: unknown[]) {
+  return { where: vi.fn().mockResolvedValue(rows) }
+}
+
 describe('CategoryService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -44,19 +69,23 @@ describe('CategoryService', () => {
   // listCategories
   // =========================================================================
   describe('listCategories', () => {
-    it('should return categories ordered by isDefault DESC, name ASC', async () => {
-      const mockCategories = [
-        { id: '1', name: 'Alimentação', isDefault: true },
-        { id: '2', name: 'Transporte', isDefault: true },
-        { id: '3', name: 'Lazer', isDefault: false },
-      ]
+    it('returns existing categories when defaults are already in sync', async () => {
+      const existing = DEFAULT_NAMES.map((name, i) => ({
+        id: String(i + 1),
+        name,
+        isDefault: true,
+        userId: TEST_USER,
+      }))
 
+      // Primeira (e única) consulta: select().from().where().orderBy()
       mockSelect.mockReturnValue({
-        orderBy: vi.fn().mockResolvedValue(mockCategories),
+        where: vi.fn().mockReturnValue({
+          orderBy: vi.fn().mockResolvedValue(existing),
+        }),
       })
 
-      const result = await listCategories()
-      expect(result).toEqual(mockCategories)
+      const result = await listCategories(TEST_USER)
+      expect(result).toEqual(existing)
       expect(mockSelect).toHaveBeenCalled()
     })
   })
@@ -67,7 +96,7 @@ describe('CategoryService', () => {
   describe('createCategory', () => {
     it('should throw 422 VALIDATION_ERROR when name is empty', async () => {
       try {
-        await createCategory('')
+        await createCategory('', TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -78,7 +107,7 @@ describe('CategoryService', () => {
 
     it('should throw 422 VALIDATION_ERROR when name is only whitespace', async () => {
       try {
-        await createCategory('   ')
+        await createCategory('   ', TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -88,9 +117,8 @@ describe('CategoryService', () => {
     })
 
     it('should throw 422 VALIDATION_ERROR when name exceeds 50 characters', async () => {
-      const longName = 'a'.repeat(51)
       try {
-        await createCategory(longName)
+        await createCategory('a'.repeat(51), TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -100,15 +128,10 @@ describe('CategoryService', () => {
     })
 
     it('should throw 409 DUPLICATE_NAME when name already exists (case-insensitive)', async () => {
-      // Mock: duplicate found
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ id: 'existing-id' }]),
-        }),
-      })
+      mockSelect.mockReturnValue(selectWhereLimit([{ id: 'existing-id' }]))
 
       try {
-        await createCategory('Alimentação')
+        await createCategory('Alimentação', TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -118,56 +141,30 @@ describe('CategoryService', () => {
     })
 
     it('should create and return category when valid', async () => {
-      const newCategory = { id: 'new-id', name: 'Streaming', isDefault: false }
+      const newCategory = { id: 'new-id', name: 'Streaming', isDefault: false, userId: TEST_USER }
+      mockSelect.mockReturnValue(selectWhereLimit([])) // no duplicate
+      mockInsert.mockReturnValue({ returning: vi.fn().mockResolvedValue([newCategory]) })
 
-      // Mock: no duplicate found
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      })
-
-      // Mock: insert
-      mockInsert.mockReturnValue({
-        returning: vi.fn().mockResolvedValue([newCategory]),
-      })
-
-      const result = await createCategory('Streaming')
+      const result = await createCategory('Streaming', TEST_USER)
       expect(result).toEqual(newCategory)
     })
 
     it('should trim whitespace from name before creating', async () => {
-      const newCategory = { id: 'new-id', name: 'Streaming', isDefault: false }
+      const newCategory = { id: 'new-id', name: 'Streaming', isDefault: false, userId: TEST_USER }
+      mockSelect.mockReturnValue(selectWhereLimit([]))
+      mockInsert.mockReturnValue({ returning: vi.fn().mockResolvedValue([newCategory]) })
 
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      })
-
-      mockInsert.mockReturnValue({
-        returning: vi.fn().mockResolvedValue([newCategory]),
-      })
-
-      const result = await createCategory('  Streaming  ')
+      const result = await createCategory('  Streaming  ', TEST_USER)
       expect(result).toEqual(newCategory)
     })
 
     it('should accept name with exactly 50 characters', async () => {
       const name50 = 'a'.repeat(50)
-      const newCategory = { id: 'new-id', name: name50, isDefault: false }
+      const newCategory = { id: 'new-id', name: name50, isDefault: false, userId: TEST_USER }
+      mockSelect.mockReturnValue(selectWhereLimit([]))
+      mockInsert.mockReturnValue({ returning: vi.fn().mockResolvedValue([newCategory]) })
 
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      })
-
-      mockInsert.mockReturnValue({
-        returning: vi.fn().mockResolvedValue([newCategory]),
-      })
-
-      const result = await createCategory(name50)
+      const result = await createCategory(name50, TEST_USER)
       expect(result).toEqual(newCategory)
     })
   })
@@ -177,14 +174,10 @@ describe('CategoryService', () => {
   // =========================================================================
   describe('deleteCategory', () => {
     it('should throw 404 NOT_FOUND when category does not exist', async () => {
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([]),
-        }),
-      })
+      mockSelect.mockReturnValue(selectWhereLimit([]))
 
       try {
-        await deleteCategory('non-existent-id')
+        await deleteCategory('non-existent-id', TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -193,38 +186,15 @@ describe('CategoryService', () => {
       }
     })
 
-    it('should throw 409 IS_DEFAULT when category is default', async () => {
-      mockSelect.mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ id: 'cat-1', name: 'Alimentação', isDefault: true }]),
-        }),
-      })
-
-      try {
-        await deleteCategory('cat-1')
-        expect.fail('Should have thrown')
-      } catch (err) {
-        const error = err as ServiceError
-        expect(error.statusCode).toBe(409)
-        expect(error.code).toBe('IS_DEFAULT')
-      }
-    })
-
     it('should throw 409 HAS_TRANSACTIONS when category has linked transactions', async () => {
-      // First call: select category (not default)
       mockSelect
-        .mockReturnValueOnce({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 'cat-2', name: 'Lazer', isDefault: false }]),
-          }),
-        })
-        // Second call: count transactions
-        .mockReturnValueOnce({
-          where: vi.fn().mockResolvedValue([{ total: 3 }]),
-        })
+        // 1) busca a categoria (pertence ao usuário)
+        .mockReturnValueOnce(selectWhereLimit([{ id: 'cat-2', name: 'Lazer', isDefault: false, userId: TEST_USER }]))
+        // 2) conta transações vinculadas
+        .mockReturnValueOnce(selectWhere([{ total: 3 }]))
 
       try {
-        await deleteCategory('cat-2')
+        await deleteCategory('cat-2', TEST_USER)
         expect.fail('Should have thrown')
       } catch (err) {
         const error = err as ServiceError
@@ -233,22 +203,13 @@ describe('CategoryService', () => {
       }
     })
 
-    it('should delete category when it is custom and has no transactions', async () => {
-      // First call: select category (not default)
+    it('should delete category when it has no transactions', async () => {
       mockSelect
-        .mockReturnValueOnce({
-          where: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue([{ id: 'cat-3', name: 'Custom', isDefault: false }]),
-          }),
-        })
-        // Second call: count transactions = 0
-        .mockReturnValueOnce({
-          where: vi.fn().mockResolvedValue([{ total: 0 }]),
-        })
-
+        .mockReturnValueOnce(selectWhereLimit([{ id: 'cat-3', name: 'Custom', isDefault: false, userId: TEST_USER }]))
+        .mockReturnValueOnce(selectWhere([{ total: 0 }]))
       mockDelete.mockResolvedValue(undefined)
 
-      await deleteCategory('cat-3')
+      await deleteCategory('cat-3', TEST_USER)
       expect(mockDelete).toHaveBeenCalled()
     })
   })

@@ -19,13 +19,16 @@ vi.mock('../db/index.js', () => ({
 }))
 
 vi.mock('../db/schema.js', () => ({
-  categories: { id: 'id', name: 'name', isDefault: 'is_default' },
-  transactions: { categoryId: 'category_id' },
+  categories: { id: 'id', name: 'name', isDefault: 'is_default', userId: 'user_id' },
+  transactions: { categoryId: 'category_id', userId: 'user_id' },
 }))
 
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((a, b) => ({ op: 'eq', a, b })),
-  sql: vi.fn(),
+  and: vi.fn((...conds) => ({ op: 'and', conds })),
+  or: vi.fn((...conds) => ({ op: 'or', conds })),
+  isNull: vi.fn((col) => ({ op: 'isNull', col })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ op: 'sql', strings, values })),
   asc: vi.fn((col) => ({ op: 'asc', col })),
   desc: vi.fn((col) => ({ op: 'desc', col })),
   count: vi.fn(() => 'count'),
@@ -35,6 +38,8 @@ vi.mock('drizzle-orm', () => ({
 // Import after mocks are set up
 // ---------------------------------------------------------------------------
 import { createCategory } from './categoryService'
+
+const TEST_USER = 'user-1'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -108,7 +113,7 @@ describe('Property 6: Unicidade case-insensitive (categorias)', () => {
         })
 
         try {
-          await createCategory(nameToCreate)
+          await createCategory(nameToCreate, TEST_USER)
           // If we reach here, the property is violated
           expect.fail(
             `Expected createCategory("${nameToCreate}") to throw 409 DUPLICATE_NAME ` +

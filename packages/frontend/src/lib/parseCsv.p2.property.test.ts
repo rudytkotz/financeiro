@@ -84,12 +84,15 @@ const invalidDateArb = fc.oneof(
   ),
 )
 
-/** Generates an invalid amount (zero, negative, non-numeric, or empty) */
+/**
+ * Generates an invalid amount (zero, non-numeric, or empty).
+ *
+ * Nota: valores negativos NÃO são inválidos — representam estornos/reembolsos
+ * e são extraídos como transações válidas pelo parser. Por isso não aparecem aqui.
+ */
 const invalidAmountArb = fc.oneof(
   fc.constant('0'),
   fc.constant('0.00'),
-  fc.constant('-10.50'),
-  fc.constant('-1'),
   fc.constant('abc'),
   fc.constant(''),
   fc.constant('NaN'),

@@ -113,6 +113,10 @@ describe('TransactionModal', () => {
         description: 'Almoço',
         amount: 2550,
         categoryId: 'cat-1',
+        dependentId: null,
+        operationType: 'despesa',
+        installmentTotal: 1,
+        paymentMethod: 'credito',
       })
     })
   })

@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, isNull, sql } from 'drizzle-orm'
+import { eq, and, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { transactions, categories, dependents, income } from '../db/schema.js'
 
@@ -86,7 +86,6 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
     }
   }
 
-  const { firstDay, lastDay } = range
   const monthCond = monthCondition(month)
   const userCond = userId ? sql`(${transactions.userId} = ${userId} OR ${transactions.userId} IS NULL)` : sql`1=1`
   const fullCond = sql`${monthCond} AND ${userCond}`

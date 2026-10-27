@@ -499,7 +499,7 @@ function TransactionsSection() {
           {/* MOBILE CARDS */}
           <div className="space-y-2.5 md:hidden">
             {transactions.map((t) => (
-              <MobCard key={t.id} t={t} cats={categories ?? []} deps={dependents ?? []} catMap={categoryMap}
+              <MobCard key={t.id} t={t} cats={categories ?? []} deps={dependents ?? []}
                 onDesc={saveDesc} onCat={saveCat} onAmt={saveAmt} onPm={savePm} onDel={handleOpenDelete} />
             ))}
           </div>
@@ -652,9 +652,9 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
 // ===========================================================================
 // MOBILE CARD
 // ===========================================================================
-interface MP extends Omit<RP, 'odd'> { catMap: Map<string, string> }
+type MP = Omit<RP, 'odd'>
 
-function MobCard({ t, cats, deps, catMap, onDesc, onCat, onAmt, onPm, onDel }: MP) {
+function MobCard({ t, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: MP) {
   const [desc, setDesc] = useState(t.description)
   const [amt, setAmt] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pm = getPm((t as any).paymentMethod || 'credito')

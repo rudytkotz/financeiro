@@ -1,4 +1,4 @@
-import { eq, and, asc, desc, gte, sql } from 'drizzle-orm'
+import { eq, and, asc, desc } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { investments, investmentDividends, portfolioSnapshots, allocationTargets } from '../db/schema.js'
 import type { InvestmentDividend, PortfolioSnapshot, AllocationTarget } from '../db/schema.js'

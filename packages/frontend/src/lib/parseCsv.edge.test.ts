@@ -8,11 +8,14 @@ describe('parseCsvString — casos de borda', () => {
   })
 
   it('todas as linhas inválidas retorna 0 válidas e invalidCount > 0', () => {
+    // Nota: valores negativos NÃO são inválidos — representam estornos/reembolsos.
+    // Por isso usamos apenas linhas realmente inválidas: data inválida,
+    // descrição vazia e valor não numérico.
     const csv = [
       'data,descrição,valor',
       'invalid-date,Compra,100.00',
       '2024-01-15,,50.00',
-      '2024-02-10,Mercado,-10.00',
+      '2024-02-10,Mercado,abc',
     ].join('\n')
 
     const result = parseCsvString(csv)
@@ -21,13 +24,8 @@ describe('parseCsvString — casos de borda', () => {
   })
 
   it('campo valor com vírgula decimal "123,45" é interpretado corretamente', () => {
-    const csv = [
-      'data,descrição,valor',
-      '2024-03-01,Mercado,123,45',
-    ].join('\n')
-
-    // PapaParse splits on commas, so "123,45" might be parsed differently.
-    // Let's test with the value quoted to represent a real comma-decimal value:
+    // PapaParse divide nas vírgulas, então um valor com vírgula decimal precisa
+    // estar entre aspas para representar "123,45" como um único campo.
     const csvQuoted = [
       'data,descrição,valor',
       '2024-03-01,Mercado,"123,45"',

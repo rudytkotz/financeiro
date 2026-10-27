@@ -1,4 +1,4 @@
-import { eq, sql, and, asc, count, isNull } from 'drizzle-orm'
+import { eq, sql, and, asc, count } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { categories, transactions } from '../db/schema.js'
 import type { Category } from '../db/schema.js'
