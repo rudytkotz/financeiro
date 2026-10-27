@@ -156,7 +156,7 @@ function TransactionsSection() {
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [rawTransactions, dependentId, paymentMethodFilter, searchText, sortField, sortDir])
+  }, [rawTransactions, categoryId, dependentId, paymentMethodFilter, searchText, sortField, sortDir, categoryMap, dependents])
 
   const total = useMemo(() => transactions.reduce((s, t) => s + t.amount, 0), [transactions])
   const totalExpenses = useMemo(() => transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions])
@@ -576,6 +576,20 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
   const [amt, setAmt] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pm = getPm((t as any).paymentMethod || 'credito')
 
+  // Ressincroniza o estado local quando o valor vindo do servidor muda
+  // (ex.: após refetch/reordenação da lista). Sem isto, a linha pode exibir
+  // valores "presos" de outra transação por causa da reutilização de estado.
+  const [prevDesc, setPrevDesc] = useState(t.description)
+  if (t.description !== prevDesc) {
+    setPrevDesc(t.description)
+    setDesc(t.description)
+  }
+  const [prevAmount, setPrevAmount] = useState(t.amount)
+  if (t.amount !== prevAmount) {
+    setPrevAmount(t.amount)
+    setAmt((t.amount / 100).toFixed(2).replace('.', ','))
+  }
+
   return (
     <tr className={`group transition-colors ${odd ? 'bg-gray-50/30' : ''} hover:bg-primary/[0.02]`}>
       <td className="px-4 py-3 text-xs font-medium text-gray-400 whitespace-nowrap">{formatDate(t.date)}</td>
@@ -645,6 +659,19 @@ function MobCard({ t, cats, deps, catMap, onDesc, onCat, onAmt, onPm, onDel }: M
   const [amt, setAmt] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pm = getPm((t as any).paymentMethod || 'credito')
   const Icon = pm.icon
+
+  // Ressincroniza o estado local quando o valor vindo do servidor muda
+  // (ex.: após refetch/reordenação da lista).
+  const [prevDesc, setPrevDesc] = useState(t.description)
+  if (t.description !== prevDesc) {
+    setPrevDesc(t.description)
+    setDesc(t.description)
+  }
+  const [prevAmount, setPrevAmount] = useState(t.amount)
+  if (t.amount !== prevAmount) {
+    setPrevAmount(t.amount)
+    setAmt((t.amount / 100).toFixed(2).replace('.', ','))
+  }
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-3.5 shadow-sm active:shadow-none transition-shadow">

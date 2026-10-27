@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useSetTransactionDependent } from '@/hooks/useMutations'
 import type { Dependent } from '@financeiro/shared'
 import axios from 'axios'
@@ -16,7 +16,6 @@ export default function DependentSelector({
 }: DependentSelectorProps) {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [pendingDependentId, setPendingDependentId] = useState<string | null>(null)
-  const selectRef = useRef<HTMLSelectElement>(null)
   const mutation = useSetTransactionDependent()
 
   async function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -34,12 +33,9 @@ export default function DependentSelector({
       ) {
         setPendingDependentId(value)
         setShowConfirmModal(true)
-      } else {
-        // Revert dropdown to previous value
-        if (selectRef.current) {
-          selectRef.current.value = currentDependentId ?? ''
-        }
       }
+      // Em caso de erro, o select (controlado) já reflete currentDependentId,
+      // então não é preciso reverter manualmente.
     }
   }
 
@@ -51,10 +47,7 @@ export default function DependentSelector({
         payload: { dependentId: pendingDependentId, force: true },
       })
     } catch {
-      // Revert dropdown on failure
-      if (selectRef.current) {
-        selectRef.current.value = currentDependentId ?? ''
-      }
+      // Falha: o select controlado mantém o valor atual automaticamente.
     }
     setPendingDependentId(null)
   }
@@ -62,17 +55,12 @@ export default function DependentSelector({
   function handleCancel() {
     setShowConfirmModal(false)
     setPendingDependentId(null)
-    // Revert dropdown to previous value
-    if (selectRef.current) {
-      selectRef.current.value = currentDependentId ?? ''
-    }
   }
 
   return (
     <>
       <select
-        ref={selectRef}
-        defaultValue={currentDependentId ?? ''}
+        value={currentDependentId ?? ''}
         onChange={handleChange}
         disabled={mutation.isPending}
         className="w-full rounded border border-gray-300 bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
