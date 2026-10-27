@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from '@/hooks/useAccounts'
+import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useInvoice } from '@/hooks/useAccounts'
 import type { Account, AccountType } from '@financeiro/shared'
-import { Wallet, CreditCard, PiggyBank, Landmark, Banknote, TrendingUp, Plus, Trash2, Pencil, Check } from 'lucide-react'
+import { Wallet, CreditCard, PiggyBank, Landmark, Banknote, TrendingUp, Plus, Trash2, Pencil, Check, Receipt, ChevronDown } from 'lucide-react'
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; icon: typeof Wallet }[] = [
   { value: 'corrente', label: 'Conta corrente', icon: Landmark },
@@ -35,18 +35,33 @@ export default function AccountsPage() {
   const [name, setName] = useState('')
   const [type, setType] = useState<AccountType>('corrente')
   const [initialBalance, setInitialBalance] = useState('0,00')
+  const [closingDay, setClosingDay] = useState('')
+  const [dueDay, setDueDay] = useState('')
+  const [creditLimit, setCreditLimit] = useState('')
   const [error, setError] = useState('')
 
   const totalBalance = (accounts ?? []).reduce((sum, a) => sum + a.currentBalance, 0)
 
+  function resetForm() {
+    setName(''); setType('corrente'); setInitialBalance('0,00')
+    setClosingDay(''); setDueDay(''); setCreditLimit('')
+    setShowForm(false); setError('')
+  }
+
   function handleCreate() {
     if (!name.trim()) { setError('Informe o nome da conta.'); return }
+    const isCard = type === 'cartao'
     createAccount.mutate(
-      { name: name.trim(), type, initialBalance: parseCurrency(initialBalance) },
       {
-        onSuccess: () => {
-          setName(''); setType('corrente'); setInitialBalance('0,00'); setShowForm(false); setError('')
-        },
+        name: name.trim(),
+        type,
+        initialBalance: parseCurrency(initialBalance),
+        closingDay: isCard && closingDay ? Number(closingDay) : null,
+        dueDay: isCard && dueDay ? Number(dueDay) : null,
+        creditLimit: isCard && creditLimit ? parseCurrency(creditLimit) : null,
+      },
+      {
+        onSuccess: resetForm,
         onError: () => setError('Erro ao criar a conta.'),
       },
     )
@@ -101,8 +116,30 @@ export default function AccountsPage() {
               />
             </div>
           </div>
+
+          {/* Campos específicos de cartão de crédito */}
+          {type === 'cartao' && (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Dia de fechamento</label>
+                <input type="number" min={1} max={31} value={closingDay} onChange={(e) => setClosingDay(e.target.value)} placeholder="Ex: 28"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Dia de vencimento</label>
+                <input type="number" min={1} max={31} value={dueDay} onChange={(e) => setDueDay(e.target.value)} placeholder="Ex: 10"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Limite (R$)</label>
+                <input type="text" inputMode="decimal" value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} placeholder="0,00"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+            </div>
+          )}
+
           <div className="mt-3 flex justify-end gap-2">
-            <button onClick={() => { setShowForm(false); setError('') }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
+            <button onClick={resetForm} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
             <button onClick={handleCreate} disabled={createAccount.isPending} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
               {createAccount.isPending ? 'Salvando...' : 'Adicionar'}
             </button>
@@ -173,6 +210,71 @@ function AccountCard({ account, onDelete }: { account: Account; onDelete: () => 
       <p className={`mt-3 text-lg font-bold ${account.currentBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
         {formatCurrency(account.currentBalance)}
       </p>
+
+      {account.type === 'cartao' && <InvoicePanel account={account} />}
+    </div>
+  )
+}
+
+function getCurrentMonth(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function InvoicePanel({ account }: { account: Account }) {
+  const [open, setOpen] = useState(false)
+  const month = getCurrentMonth()
+  const { data: invoice, isLoading } = useInvoice(open ? account.id : null, month)
+
+  return (
+    <div className="mt-3 border-t border-gray-100 pt-3">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between text-xs font-medium text-primary hover:underline"
+      >
+        <span className="flex items-center gap-1.5"><Receipt className="h-3.5 w-3.5" /> Fatura atual</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="mt-2 text-xs">
+          {isLoading ? (
+            <p className="text-gray-400">Carregando fatura...</p>
+          ) : invoice ? (
+            <div className="space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Total da fatura</span>
+                <span className="font-bold text-gray-900">{formatCurrency(invoice.total)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Fecha em</span>
+                <span className="text-gray-700">{invoice.closingDate.split('-').reverse().join('/')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Vence em</span>
+                <span className="text-gray-700">{invoice.dueDate.split('-').reverse().join('/')}</span>
+              </div>
+              {invoice.limitUsagePct !== null && (
+                <div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Uso do limite</span>
+                    <span className="text-gray-700">{invoice.limitUsagePct.toFixed(0)}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-gray-100">
+                    <div
+                      className={`h-full rounded-full ${invoice.limitUsagePct >= 90 ? 'bg-red-500' : invoice.limitUsagePct >= 70 ? 'bg-amber-400' : 'bg-primary'}`}
+                      style={{ width: `${Math.min(invoice.limitUsagePct, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              <p className="pt-1 text-[10px] text-gray-400">{invoice.transactions.length} lançamento(s) no ciclo</p>
+            </div>
+          ) : (
+            <p className="text-gray-400">Não foi possível carregar a fatura.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

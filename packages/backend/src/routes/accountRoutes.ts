@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { listAccounts, createAccount, updateAccount, deleteAccount } from '../services/accountService.js'
+import { getInvoice } from '../services/invoiceService.js'
 import { getUserId } from '../lib/auth.js'
 import { parse } from '../lib/validation.js'
-import { createAccountSchema, updateAccountSchema, idParamSchema } from '../lib/schemas.js'
+import { createAccountSchema, updateAccountSchema, idParamSchema, invoiceQuerySchema } from '../lib/schemas.js'
 
 const accountRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/accounts', async (request, reply) => {
@@ -26,6 +27,12 @@ const accountRoutes: FastifyPluginAsync = async (app) => {
     const { id } = parse(idParamSchema, request.params)
     await deleteAccount(id, getUserId(request))
     return reply.status(204).send()
+  })
+
+  // Fatura de um cartão de crédito para um mês de vencimento
+  app.get('/api/accounts/invoice', async (request, reply) => {
+    const { accountId, month } = parse(invoiceQuerySchema, request.query)
+    return reply.send(await getInvoice(accountId, month, getUserId(request)))
   })
 }
 

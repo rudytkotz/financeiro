@@ -52,13 +52,16 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Aba "Recorrentes" em Transações com botão "Gerar mês atual"
 - Pendente: lembrete automático de vencimento (virá na Fase 8 — alertas Telegram)
 
+### Fase 5 — Cartão de crédito como fatura (#5)
+- `invoiceService` calcula a fatura do ciclo (entre fechamento anterior e atual) e uso do limite
+- Rota `GET /api/accounts/invoice?accountId&month`
+- Formulário de conta com campos de cartão (dia de fechamento, vencimento, limite)
+- Painel "Fatura atual" no card da conta (total, fechamento, vencimento, barra de uso do limite)
+- Observação: modelo simplificado de ciclo (compras entre fechamento anterior exclusivo e atual inclusivo)
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 5 — Cartão de crédito como fatura (#5)
-- [ ] Ciclo de fatura (fechamento/vencimento) usando campos já criados em `accounts`
-- [ ] Fatura atual vs. próxima, uso do limite
 
 ### Fase 6 — Metas financeiras (#6)
 - [ ] Tabela `goals` (objetivo, valor alvo, prazo)

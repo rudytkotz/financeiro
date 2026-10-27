@@ -98,6 +98,11 @@ export const updateAccountSchema = createAccountSchema.partial().extend({
   archived: z.boolean().optional(),
 })
 
+export const invoiceQuerySchema = z.object({
+  accountId: uuid,
+  month: month,
+})
+
 // ---------------------------------------------------------------------------
 // Dependentes
 // ---------------------------------------------------------------------------

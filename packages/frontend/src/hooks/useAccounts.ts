@@ -12,6 +12,17 @@ export function useAccounts() {
   })
 }
 
+export function useInvoice(accountId: string | null, month: string) {
+  return useQuery<import('@financeiro/shared').InvoiceSummary>({
+    queryKey: ['invoice', accountId, month],
+    queryFn: async () => {
+      const { data } = await api.get('/api/accounts/invoice', { params: { accountId, month } })
+      return data
+    },
+    enabled: !!accountId && !!month,
+  })
+}
+
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['accounts'] })
   qc.invalidateQueries({ queryKey: ['transactions'] })

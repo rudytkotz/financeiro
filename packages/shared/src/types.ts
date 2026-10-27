@@ -96,6 +96,20 @@ export interface CreateAccountPayload {
   creditLimit?: number | null
 }
 
+// Fatura de cartão de crédito
+export interface InvoiceSummary {
+  accountId: string
+  accountName: string
+  referenceMonth: string
+  closingDate: string
+  dueDate: string
+  previousClosingDate: string
+  total: number              // centavos
+  creditLimit: number | null
+  limitUsagePct: number | null
+  transactions: Transaction[]
+}
+
 export interface Import {
   id: string
   referenceMonth: string // YYYY-MM
