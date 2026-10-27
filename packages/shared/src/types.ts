@@ -306,6 +306,27 @@ export interface DividendHistoryEvent {
   amount: number    // reais por cota
 }
 
+// Projeção de proventos futuros
+export interface DividendForecastItem {
+  investmentId: string
+  ticker: string | null
+  name: string
+  quantity: number
+  perShareLast12m: number     // reais por cota (soma 12m)
+  projectedAnnual: number     // centavos
+  projectedMonthly: number    // centavos
+  projectedYieldOnCost: number // %
+}
+
+export interface DividendForecast {
+  items: DividendForecastItem[]
+  totalProjectedAnnual: number
+  totalProjectedMonthly: number
+  projectedYieldOnCost: number
+  calendar: Array<{ monthLabel: string; amount: number }>
+  hasData: boolean
+}
+
 // Alertas de vencimento (RF)
 export interface MaturityAlert {
   investmentId: string

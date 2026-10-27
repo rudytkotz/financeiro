@@ -4,6 +4,7 @@ import { investments, investmentDividends, portfolioSnapshots, allocationTargets
 import type { InvestmentDividend, PortfolioSnapshot, AllocationTarget } from '../db/schema.js'
 import { getRvPositions, getPortfolioSummary, type RvPosition } from './investmentService.js'
 import { getRfPositions } from './investmentService.js'
+import { getDividendHistory } from './quoteService.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
 
 export type { ServiceError }
@@ -144,6 +145,131 @@ export async function getDividendSummary(userId: string): Promise<DividendSummar
     byMonth,
     portfolioYield,
     yieldOnCost,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Projeção de proventos futuros (via histórico do Yahoo) + calendário
+// ---------------------------------------------------------------------------
+
+export interface DividendForecastItem {
+  investmentId: string
+  ticker: string | null
+  name: string
+  quantity: number
+  // Proventos por cota recebidos nos últimos 12 meses (soma), em reais
+  perShareLast12m: number
+  // Projeção anual estimada em centavos (perShare * quantidade)
+  projectedAnnual: number
+  // Projeção mensal média em centavos
+  projectedMonthly: number
+  // Yield on cost projetado (%) do ativo
+  projectedYieldOnCost: number
+}
+
+export interface DividendForecast {
+  items: DividendForecastItem[]
+  totalProjectedAnnual: number     // centavos
+  totalProjectedMonthly: number    // centavos
+  projectedYieldOnCost: number     // % sobre o total investido
+  // Calendário estimado: mês (MM) → centavos previstos, baseado nos meses
+  // em que o ativo pagou nos últimos 12 meses
+  calendar: Array<{ monthLabel: string; amount: number }>
+  hasData: boolean
+}
+
+const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+/**
+ * Projeta os proventos dos próximos 12 meses com base no histórico de
+ * dividendos do Yahoo (valor por cota) e na quantidade atual em carteira.
+ *
+ * Para cada ativo RV com posição:
+ *  - busca os dividendos por cota dos últimos 12 meses no Yahoo
+ *  - projeta o total anual = soma(por cota 12m) * quantidade
+ *  - distribui no calendário pelos meses em que houve pagamento
+ *
+ * Ativos sem histórico no Yahoo (ou sem ticker) são ignorados na projeção.
+ */
+export async function getDividendForecast(userId: string): Promise<DividendForecast> {
+  const positions = await getRvPositions(userId)
+  const active = positions.filter((p) => p.quantity > 0 && p.investment.ticker)
+
+  if (active.length === 0) {
+    return {
+      items: [],
+      totalProjectedAnnual: 0,
+      totalProjectedMonthly: 0,
+      projectedYieldOnCost: 0,
+      calendar: MONTH_LABELS.map((monthLabel) => ({ monthLabel, amount: 0 })),
+      hasData: false,
+    }
+  }
+
+  const cutoff = new Date()
+  cutoff.setFullYear(cutoff.getFullYear() - 1)
+  const cutoffStr = cutoff.toISOString().slice(0, 10)
+
+  // Busca o histórico de cada ativo no Yahoo (em paralelo)
+  const histories = await Promise.all(
+    active.map(async (pos) => ({
+      pos,
+      events: await getDividendHistory(pos.investment.ticker!),
+    })),
+  )
+
+  const items: DividendForecastItem[] = []
+  const calendarCents = new Array(12).fill(0)
+  let totalInvested = 0
+
+  for (const { pos, events } of histories) {
+    totalInvested += pos.investedTotal
+    // Eventos dos últimos 12 meses
+    const recent = events.filter((e) => e.date >= cutoffStr)
+    if (recent.length === 0) continue
+
+    const perShareLast12m = recent.reduce((s, e) => s + e.amount, 0) // reais por cota
+    const projectedAnnual = Math.round(perShareLast12m * 100) * pos.quantity // centavos
+    const projectedMonthly = Math.round(projectedAnnual / 12)
+    const projectedYieldOnCost = pos.investedTotal > 0
+      ? Math.round((projectedAnnual / pos.investedTotal) * 10000) / 100
+      : 0
+
+    items.push({
+      investmentId: pos.investment.id,
+      ticker: pos.investment.ticker,
+      name: pos.investment.name,
+      quantity: pos.quantity,
+      perShareLast12m: Math.round(perShareLast12m * 100) / 100,
+      projectedAnnual,
+      projectedMonthly,
+      projectedYieldOnCost,
+    })
+
+    // Distribui no calendário pelos meses em que pagou (repete no próximo ciclo)
+    for (const e of recent) {
+      const monthIdx = parseInt(e.date.substring(5, 7), 10) - 1
+      if (monthIdx >= 0 && monthIdx < 12) {
+        calendarCents[monthIdx] += Math.round(e.amount * 100) * pos.quantity
+      }
+    }
+  }
+
+  items.sort((a, b) => b.projectedAnnual - a.projectedAnnual)
+
+  const totalProjectedAnnual = items.reduce((s, it) => s + it.projectedAnnual, 0)
+  const totalProjectedMonthly = Math.round(totalProjectedAnnual / 12)
+  const projectedYieldOnCost = totalInvested > 0
+    ? Math.round((totalProjectedAnnual / totalInvested) * 10000) / 100
+    : 0
+
+  return {
+    items,
+    totalProjectedAnnual,
+    totalProjectedMonthly,
+    projectedYieldOnCost,
+    calendar: MONTH_LABELS.map((monthLabel, i) => ({ monthLabel, amount: calendarCents[i] })),
+    hasData: items.length > 0,
   }
 }
 

@@ -103,10 +103,20 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Registro do SW apenas em produção (não interfere no HMR)
 - App instalável com ícone na home e funcionamento básico offline
 
+### Fase 10 — Proventos projetados / calendário (#11)
+- `getDividendForecast`: projeta proventos dos próximos 12 meses a partir do histórico de dividendos por cota do Yahoo (× quantidade atual)
+- Yield on cost projetado (por ativo e da carteira) e calendário estimado por mês
+- Rota `GET /api/investments/dividends/forecast`
+- Painel "Projeção de proventos" na página de Investimentos (resumo, calendário em barras e detalhe por ativo)
+- Ativos sem histórico no Yahoo são ignorados na projeção (sem custo/sem fonte paga)
+
 ---
 
-## 🚧 Próximas fases
+## 🎉 Todas as fases planejadas concluídas
 
-### Fase 10 — Proventos projetados / calendário (#11)
-- [ ] Projeção de proventos futuros e yield on cost
-- [ ] Calendário de pagamentos
+Fora de escopo por decisão do usuário: #9 B3 (custo), #13 multi-moeda/idioma, #16 anexos.
+
+Itens parciais que podem virar fases futuras, se desejado:
+- Tesouro Direto com marcação a mercado e previdência (Fase 9)
+- Relatórios anuais/comparativos de transações (Fase 12)
+- Agendador automático para `POST /api/alerts/dispatch` (Fase 8) — hoje depende de disparo externo

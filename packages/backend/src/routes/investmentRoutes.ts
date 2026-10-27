@@ -34,6 +34,7 @@ import {
   setAllocationTargets,
   getRebalance,
   getTaxReport,
+  getDividendForecast,
   type CreateDividendData,
   type UpdateDividendData,
   type SetTargetData,
@@ -77,6 +78,11 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
   // ---- Proventos ----
   app.get('/api/investments/dividends', async (request, reply) => {
     return reply.send(await getDividendSummary(getUserId(request)))
+  })
+
+  // Projeção de proventos futuros + calendário (via histórico do Yahoo)
+  app.get('/api/investments/dividends/forecast', async (request, reply) => {
+    return reply.send(await getDividendForecast(getUserId(request)))
   })
 
   app.post('/api/investments/dividends', async (request, reply) => {

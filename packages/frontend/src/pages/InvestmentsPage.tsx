@@ -15,11 +15,12 @@ import {
   useSnapshots,
   useRebalance,
   useDeleteDividend,
+  useDividendForecast,
 } from '@/hooks/useInvestments'
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
-  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle, FileText, Pencil,
+  LineChart as LineIcon, Wallet, Percent, ChevronDown, Coins, Target, AlertTriangle, FileText, Pencil, CalendarDays,
 } from 'lucide-react'
 import NewRvModal from '@/components/investments/NewRvModal'
 import NewRfModal from '@/components/investments/NewRfModal'
@@ -477,6 +478,9 @@ export default function InvestmentsPage() {
         </div>
       </div>
 
+      {/* Projeção de proventos (via histórico do Yahoo) */}
+      <DividendForecastPanel />
+
       {/* Abas RV / RF */}
       <div className="flex gap-2 border-b border-gray-100">
         <TabButton active={tab === 'rv'} onClick={() => setTab('rv')} icon={<LineIcon className="h-4 w-4" />} label={`Renda Variável (${activeRv.length})`} />
@@ -737,5 +741,82 @@ function EmptyState({ text }: { text: string }) {
     <p className="text-sm text-gray-400 text-center py-8 rounded-2xl border border-dashed border-gray-200 bg-gray-50/50">
       {text}
     </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Projeção de proventos (via histórico de dividendos do Yahoo)
+// ---------------------------------------------------------------------------
+
+function DividendForecastPanel() {
+  const { data: forecast, isLoading } = useDividendForecast()
+
+  if (isLoading) return null
+  if (!forecast || !forecast.hasData) return null
+
+  const maxCal = Math.max(...forecast.calendar.map((c) => c.amount), 1)
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-bold text-gray-700">
+          <CalendarDays className="h-4 w-4 text-emerald-500" /> Projeção de proventos (12 meses)
+        </h2>
+        <div className="text-right">
+          <p className="text-[10px] uppercase tracking-wider text-gray-400">Previsto/ano · YoC proj.</p>
+          <p className="text-xs font-bold text-emerald-600">
+            {fmt(forecast.totalProjectedAnnual)} · {forecast.projectedYieldOnCost.toFixed(2)}%
+          </p>
+        </div>
+      </div>
+
+      {/* Resumo */}
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="rounded-xl bg-emerald-50 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-600/70">Média mensal prevista</p>
+          <p className="text-base font-bold text-emerald-700">{fmt(forecast.totalProjectedMonthly)}</p>
+        </div>
+        <div className="rounded-xl bg-gray-50 p-3">
+          <p className="text-[10px] uppercase tracking-wider text-gray-400">Ativos na projeção</p>
+          <p className="text-base font-bold text-gray-700">{forecast.items.length}</p>
+        </div>
+      </div>
+
+      {/* Calendário anual estimado */}
+      <div className="mb-4">
+        <p className="mb-2 text-[11px] font-medium text-gray-500">Calendário estimado (por mês)</p>
+        <div className="flex items-end gap-1 h-24">
+          {forecast.calendar.map((c) => (
+            <div key={c.monthLabel} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-1 items-end">
+                <div
+                  className="w-full rounded-t bg-emerald-400"
+                  style={{ height: `${(c.amount / maxCal) * 100}%` }}
+                  title={fmt(c.amount)}
+                />
+              </div>
+              <span className="text-[9px] text-gray-400">{c.monthLabel}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Por ativo */}
+      <ul className="divide-y divide-gray-50 max-h-[160px] overflow-y-auto">
+        {forecast.items.map((it) => (
+          <li key={it.investmentId} className="flex items-center justify-between py-1.5 text-xs">
+            <span className="font-medium text-gray-700">{it.ticker ?? it.name}</span>
+            <span className="flex items-center gap-2">
+              <span className="text-gray-400">{it.projectedYieldOnCost.toFixed(1)}% YoC</span>
+              <span className="font-semibold text-emerald-700">{fmt(it.projectedAnnual)}/ano</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-3 text-[10px] text-gray-400">
+        Estimativa baseada nos proventos por cota dos últimos 12 meses (Yahoo Finance). Valores futuros podem variar.
+      </p>
+    </div>
   )
 }

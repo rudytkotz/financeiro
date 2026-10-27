@@ -212,6 +212,17 @@ export function useDividends() {
   })
 }
 
+export function useDividendForecast() {
+  return useQuery<import('@financeiro/shared').DividendForecast>({
+    queryKey: ['investments', 'dividends', 'forecast'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/investments/dividends/forecast')
+      return data
+    },
+    staleTime: 30 * 60 * 1000,
+  })
+}
+
 export function useAddDividend() {
   const qc = useQueryClient()
   return useMutation<unknown, Error, CreateDividendPayload>({
