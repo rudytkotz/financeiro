@@ -5,9 +5,11 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { useDependents } from '@/hooks/useDependents'
 import { useCategories } from '@/hooks/useCategories'
 import { usePortfolioSummary } from '@/hooks/useInvestments'
+import { useFinancialHealth } from '@/hooks/useFinancialHealth'
 import { useSetIncome } from '@/hooks/useMutations'
-import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight } from 'lucide-react'
-import type { PortfolioSummary } from '@financeiro/shared'
+import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight, Activity } from 'lucide-react'
+import type { PortfolioSummary, FinancialHealth } from '@financeiro/shared'
+import { Line, ComposedChart } from 'recharts'
 
 const CATEGORY_COLORS = [
   '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -54,6 +56,7 @@ export default function DashboardPage() {
   const { data: dependents } = useDependents()
   const { data: categories } = useCategories()
   const { data: portfolio } = usePortfolioSummary()
+  const { data: health } = useFinancialHealth()
 
   const categoryColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -195,6 +198,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Saúde financeira e projeção */}
+          <FinancialHealthSection health={health} />
+
           {/* Resumo de investimentos */}
           <InvestmentsOverview portfolio={portfolio} />
 
@@ -302,6 +308,81 @@ export default function DashboardPage() {
             </div>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Saúde financeira + projeção
+// ---------------------------------------------------------------------------
+
+function FinancialHealthSection({ health }: { health?: FinancialHealth }) {
+  if (!health || health.monthsAnalyzed === 0) return null
+
+  const savingsColor = health.savingsRate >= 20 ? 'text-emerald-600' : health.savingsRate >= 0 ? 'text-amber-600' : 'text-red-600'
+  const chartData = health.projection.map((p) => ({
+    name: formatMonthLabel(p.month),
+    Saldo: p.projectedBalance / 100,
+    Acumulado: p.accumulated / 100,
+  }))
+
+  return (
+    <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="rounded-lg bg-indigo-50 p-2">
+          <Activity className="h-5 w-5 text-indigo-500" />
+        </div>
+        <h2 className="text-base font-semibold text-gray-900">Saúde financeira</h2>
+      </div>
+
+      {/* Indicadores */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <p className="text-[11px] font-medium text-gray-500">Taxa de poupança</p>
+          <p className={`mt-1 text-lg font-bold ${savingsColor}`}>{health.savingsRate.toFixed(0)}%</p>
+          <p className="text-[10px] text-gray-400">da renda do mês</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <p className="text-[11px] font-medium text-gray-500">Gasto médio/mês</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrency(health.avgMonthlyExpenses)}</p>
+          <p className="text-[10px] text-gray-400">últimos {health.monthsAnalyzed} meses</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <p className="text-[11px] font-medium text-gray-500">Sobra média/mês</p>
+          <p className={`mt-1 text-lg font-bold ${health.avgMonthlyBalance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {formatCurrency(health.avgMonthlyBalance)}
+          </p>
+          <p className="text-[10px] text-gray-400">renda − gastos</p>
+        </div>
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <p className="text-[11px] font-medium text-gray-500">Metas</p>
+          <p className="mt-1 text-lg font-bold text-gray-900">
+            {health.totalGoalsTarget > 0 ? `${Math.round((health.totalGoalsSaved / health.totalGoalsTarget) * 100)}%` : '—'}
+          </p>
+          <p className="text-[10px] text-gray-400">{formatCurrency(health.totalGoalsSaved)} guardados</p>
+        </div>
+      </div>
+
+      {/* Projeção */}
+      {chartData.length > 0 && (
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-medium text-gray-500">Projeção dos próximos meses</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v}`} />
+              <Tooltip formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, '']} />
+              <Legend />
+              <Bar dataKey="Saldo" radius={[4, 4, 0, 0]} fill="#6366f1" />
+              <Line type="monotone" dataKey="Acumulado" stroke="#10b981" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <p className="mt-1 text-[10px] text-gray-400">
+            Estimativa com base nas recorrências e na média de gastos. Valores reais podem variar.
+          </p>
+        </div>
       )}
     </div>
   )

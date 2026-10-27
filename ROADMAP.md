@@ -65,13 +65,14 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - CRUD + aportes com validação Zod
 - Página "Metas" (menu próprio): barra de progresso, prazo, registrar aporte inline, estado "meta atingida"
 
+### Fase 7 — Projeções e saúde financeira (#7)
+- `projectionService`: médias históricas (últimos ~6 meses), taxa de poupança do mês, projeção de saldo dos próximos 6 meses (recorrentes + média de gastos)
+- Rota `GET /api/dashboard/health`
+- Seção "Saúde financeira" no Painel: indicadores (taxa de poupança, gasto médio, sobra média, metas) + gráfico de projeção (saldo mensal + acumulado)
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 7 — Projeções e saúde financeira (#7)
-- [ ] Previsão de saldo futuro com base em recorrentes
-- [ ] Indicadores: taxa de poupança, quanto sobra
 
 ### Fase 8 — Alertas via Telegram (#8)
 - [ ] Bot envia alertas: orçamento estourado, conta a vencer, meta atingida

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { getDashboard } from '../services/dashboardService.js'
+import { getFinancialHealth } from '../services/projectionService.js'
 import { getUserId } from '../lib/auth.js'
 import { parse } from '../lib/validation.js'
 import { dashboardQuerySchema } from '../lib/schemas.js'
@@ -16,6 +17,11 @@ const dashboardRoutes: FastifyPluginAsync = async (app) => {
       paymentMethod: paymentMethod || undefined,
     })
     return reply.send(summary)
+  })
+
+  // Saúde financeira + projeção dos próximos meses
+  app.get('/api/dashboard/health', async (request, reply) => {
+    return reply.send(await getFinancialHealth(getUserId(request)))
   })
 }
 

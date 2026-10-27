@@ -86,6 +86,28 @@ export interface AddContributionPayload {
   note?: string | null
 }
 
+// Projeção / saúde financeira
+export interface MonthProjection {
+  month: string
+  projectedIncome: number
+  projectedExpenses: number
+  projectedBalance: number
+  accumulated: number
+}
+
+export interface FinancialHealth {
+  avgMonthlyIncome: number
+  avgMonthlyExpenses: number
+  avgMonthlyBalance: number
+  currentMonthIncome: number
+  currentMonthExpenses: number
+  savingsRate: number
+  totalGoalsTarget: number
+  totalGoalsSaved: number
+  projection: MonthProjection[]
+  monthsAnalyzed: number
+}
+
 export interface Category {
   id: string
   name: string           // max 50 chars
