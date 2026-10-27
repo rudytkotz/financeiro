@@ -18,3 +18,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 )
+
+// Registra o service worker (PWA instalável). Só em produção para não
+// interferir no HMR do Vite durante o desenvolvimento.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Falha no registro não deve quebrar a aplicação
+    })
+  })
+}

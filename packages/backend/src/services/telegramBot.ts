@@ -104,7 +104,8 @@ export function startTelegramBot() {
       `• /vincular usuario senha — vincular conta\n` +
       `• /desvincular — remover vínculo\n` +
       `• /status — ver conta vinculada\n` +
-      `• /alertas — ver seus alertas financeiros\n\n` +
+      `• /alertas — ver seus alertas financeiros\n` +
+      `• /novasenha novaSenha — redefinir sua senha\n\n` +
       `Para lançar transação, envie:\n` +
       `• \`150,50 ifood\` — crédito\n` +
       `• \`pix 800 aluguel\` — pix\n` +
@@ -156,6 +157,40 @@ export function startTelegramBot() {
     }
 
     bot.sendMessage(msg.chat.id, `✅ Vinculado como *${user.username}*! Agora pode lançar transações.`, { parse_mode: 'Markdown' })
+  })
+
+  // /novasenha <nova> — redefine a senha (prova de posse = chat já vinculado)
+  bot.onText(/\/novasenha\s+(\S+)/, async (msg: any, match: RegExpExecArray | null) => {
+    if (!match) return
+    const chatId = String(msg.chat.id)
+    const newPassword = match[1]
+
+    const [link] = await db
+      .select({ userId: telegramLinks.userId })
+      .from(telegramLinks)
+      .where(eq(telegramLinks.chatId, chatId))
+      .limit(1)
+
+    if (!link) {
+      bot.sendMessage(msg.chat.id, '❌ Vincule sua conta primeiro com /vincular usuario senha para poder redefinir a senha.')
+      return
+    }
+
+    if (newPassword.length < 4 || newPassword.length > 100) {
+      bot.sendMessage(msg.chat.id, '❌ A senha deve ter entre 4 e 100 caracteres.')
+      return
+    }
+
+    try {
+      const passwordHash = await bcrypt.hash(newPassword, 10)
+      await db.update(users).set({ passwordHash }).where(eq(users.id, link.userId))
+      bot.sendMessage(msg.chat.id, '✅ Senha redefinida com sucesso! Use a nova senha para entrar no app.')
+      // Apaga a mensagem com a senha, por segurança (se o bot tiver permissão)
+      try { await bot.deleteMessage(msg.chat.id, msg.message_id) } catch { /* sem permissão: ignora */ }
+    } catch (err) {
+      console.error('Telegram /novasenha error:', err)
+      bot.sendMessage(msg.chat.id, '❌ Erro ao redefinir a senha. Tente novamente.')
+    }
   })
 
   // /desvincular command

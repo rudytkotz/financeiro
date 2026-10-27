@@ -18,8 +18,9 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
   Search, Filter, Plus, X, ChevronLeft, ChevronRight,
-  ArrowLeftRight, Upload, Tag, Target, Repeat,
+  ArrowLeftRight, Upload, Tag, Target, Repeat, Download,
 } from 'lucide-react'
+import { api } from '@/lib/api'
 import { ImportSection } from './ImportPage'
 import { CategoriesSection } from './CategoriesPage'
 import BudgetsSection from './BudgetsSection'
@@ -67,6 +68,22 @@ function offsetMonth(ym: string, offset: number) {
   const [y, m] = ym.split('-').map(Number)
   const d = new Date(y, m - 1 + offset, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Baixa o CSV de transações do mês (via axios para carregar o token de auth). */
+async function exportTransactionsCsv(month: string) {
+  const { data } = await api.get('/api/export/transactions.csv', {
+    params: { month },
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(new Blob([data], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `transacoes-${month}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 type SortField = 'date' | 'description' | 'amount' | 'installment' | 'category' | 'dependent' | 'paymentMethod'
@@ -266,6 +283,17 @@ function TransactionsSection() {
             <div className={`rounded-xl px-3 py-1.5 text-sm font-bold ${total < 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-800'}`}>
               {formatCurrency(total)}
             </div>
+          )}
+          {/* Exportar CSV do mês */}
+          {rawTransactions.length > 0 && (
+            <button
+              onClick={() => exportTransactionsCsv(month)}
+              title="Exportar transações do mês (CSV)"
+              aria-label="Exportar transações do mês"
+              className="rounded-xl border border-gray-200 bg-white p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-600 transition active:scale-95"
+            >
+              <Download className="h-4 w-4" />
+            </button>
           )}
           {/* Excluir todas — fora do painel de filtros */}
           {rawTransactions.length > 0 && (

@@ -89,12 +89,19 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - [ ] Projeção de proventos futuros e yield on cost
 - [ ] Calendário de pagamentos
 
-### Fase 11 — Recuperação de senha via Telegram (#12)
-- [ ] Código de redefinição enviado ao chat vinculado
+### Fase 11 — Recuperação de senha via Telegram (#12) ✅
+- Comando `/novasenha <nova>` no bot: redefine a senha para quem já tem o chat vinculado (prova de posse)
+- Validação de tamanho e apagamento da mensagem com a senha (quando o bot tem permissão)
+- 100% gratuito (sem e-mail transacional)
 
-### Fase 12 — Exportação e relatórios (#14)
-- [ ] Exportar transações (CSV)
-- [ ] Relatórios anuais / comparativo entre meses
+### Fase 12 — Exportação e relatórios (#14) ✅
+- `exportService` gera CSV (separador `;`, BOM UTF-8 para Excel pt-BR) com categoria, dependente, conta, parcela etc.
+- Rota `GET /api/export/transactions.csv?month=`
+- Botão de exportar na aba Transações (download via blob com token de auth)
+- Pendente: relatórios anuais/comparativos (pode entrar numa fase futura se desejado)
 
-### Fase 13 — PWA instalável (#15)
-- [ ] Manifest + service worker (instalável, ícone na home)
+### Fase 13 — PWA instalável (#15) ✅
+- `manifest.webmanifest` + ícone SVG + `theme-color`
+- Service worker (`sw.js`) com cache do app shell e estratégia network-first para navegação / cache-first para assets
+- Registro do SW apenas em produção (não interfere no HMR)
+- App instalável com ícone na home e funcionamento básico offline
