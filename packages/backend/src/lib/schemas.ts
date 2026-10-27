@@ -125,6 +125,27 @@ export const setBudgetSchema = z.object({
 })
 
 // ---------------------------------------------------------------------------
+// Recorrentes
+// ---------------------------------------------------------------------------
+
+export const createRecurringSchema = z.object({
+  description: z.string().trim().min(1, 'A descrição é obrigatória.').max(255),
+  amount: z.number().int().positive('O valor deve ser maior que zero.'),
+  kind: z.enum(['despesa', 'receita']).optional(),
+  categoryId: uuid.nullable().optional(),
+  accountId: uuid.nullable().optional(),
+  dependentId: uuid.nullable().optional(),
+  paymentMethod: paymentMethod.optional(),
+  dayOfMonth: z.number().int().min(1).max(31),
+  startMonth: month,
+  endMonth: month.nullable().optional(),
+})
+
+export const updateRecurringSchema = createRecurringSchema.partial().extend({
+  active: z.boolean().optional(),
+})
+
+// ---------------------------------------------------------------------------
 // Params comuns
 // ---------------------------------------------------------------------------
 

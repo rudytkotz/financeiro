@@ -15,8 +15,39 @@ export interface Transaction {
   installmentTotal: number | null
   accountId: string | null
   kind: 'despesa' | 'receita'
+  recurringId: string | null
   createdAt: string
   updatedAt: string
+}
+
+// Transações recorrentes / contas a pagar e receber
+export interface RecurringTransaction {
+  id: string
+  description: string
+  amount: number           // centavos
+  kind: 'despesa' | 'receita'
+  categoryId: string | null
+  accountId: string | null
+  dependentId: string | null
+  paymentMethod: string
+  dayOfMonth: number       // 1-31
+  startMonth: string       // YYYY-MM
+  endMonth: string | null  // YYYY-MM
+  active: boolean
+  createdAt: string
+}
+
+export interface CreateRecurringPayload {
+  description: string
+  amount: number
+  kind?: 'despesa' | 'receita'
+  categoryId?: string | null
+  accountId?: string | null
+  dependentId?: string | null
+  paymentMethod?: string
+  dayOfMonth: number
+  startMonth: string
+  endMonth?: string | null
 }
 
 export interface Category {

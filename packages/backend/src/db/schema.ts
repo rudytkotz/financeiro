@@ -102,6 +102,8 @@ export const transactions = pgTable(
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
     referenceMonth: varchar('reference_month', { length: 7 }), // YYYY-MM — mês em que a transação deve aparecer
     accountId: uuid('account_id').references(() => accounts.id), // conta/carteira (nullable)
+    // Vínculo com o modelo recorrente que gerou esta transação (nullable)
+    recurringId: uuid('recurring_id'),
     userId: uuid('user_id').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
@@ -283,6 +285,34 @@ export const allocationTargets = pgTable(
 )
 
 // ---------------------------------------------------------------------------
+// recurring_transactions — modelos de transações recorrentes / contas a pagar
+// ---------------------------------------------------------------------------
+export const recurringTransactions = pgTable(
+  'recurring_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    description: varchar('description', { length: 255 }).notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(), // centavos
+    kind: varchar('kind', { length: 10 }).notNull().default('despesa'), // 'despesa' | 'receita'
+    categoryId: uuid('category_id').references(() => categories.id),
+    accountId: uuid('account_id').references(() => accounts.id),
+    dependentId: uuid('dependent_id').references(() => dependents.id),
+    paymentMethod: varchar('payment_method', { length: 20 }).notNull().default('credito'),
+    // Dia do mês em que vence/ocorre (1-31; ajustado para o último dia se o mês for menor)
+    dayOfMonth: integer('day_of_month').notNull(),
+    // Período de vigência
+    startMonth: varchar('start_month', { length: 7 }).notNull(), // YYYY-MM
+    endMonth: varchar('end_month', { length: 7 }),               // YYYY-MM (nullable = sem fim)
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+  },
+  (table) => ({
+    userIdx: index('recurring_transactions_user_id_idx').on(table.userId),
+  })
+)
+
+// ---------------------------------------------------------------------------
 // budgets — orçamento (teto) por categoria por mês
 // ---------------------------------------------------------------------------
 export const budgets = pgTable(
@@ -353,3 +383,6 @@ export type NewAllocationTarget = typeof allocationTargets.$inferInsert
 
 export type Budget = typeof budgets.$inferSelect
 export type NewBudget = typeof budgets.$inferInsert
+
+export type RecurringTransaction = typeof recurringTransactions.$inferSelect
+export type NewRecurringTransaction = typeof recurringTransactions.$inferInsert

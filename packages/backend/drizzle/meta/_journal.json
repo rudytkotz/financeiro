@@ -120,6 +120,13 @@
       "when": 1725600000000,
       "tag": "0016_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1725700000000,
+      "tag": "0017_recurring_transactions",
+      "breakpoints": true
     }
   ]
 }

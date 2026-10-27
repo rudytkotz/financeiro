@@ -44,14 +44,17 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Aba "Orçamento" dentro de Transações: barra de progresso, alerta ao chegar a 80% (amarelo) e ao estourar (vermelho)
 - Navegação por mês; definir teto inline por categoria
 
+### Fase 4 — Recorrentes e contas a pagar/receber (#4)
+- Tabela `recurring_transactions` + migration `0017_recurring_transactions.sql`
+- Vínculo `recurring_id` em transações (evita duplicar na materialização)
+- CRUD de recorrências (despesa/receita, dia do mês, conta, categoria, pausar/ativar)
+- Materialização idempotente do mês (`POST /api/recurring/materialize`)
+- Aba "Recorrentes" em Transações com botão "Gerar mês atual"
+- Pendente: lembrete automático de vencimento (virá na Fase 8 — alertas Telegram)
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 4 — Recorrentes e contas a pagar/receber (#4)
-- [ ] Tabela `recurring_transactions`
-- [ ] Geração automática mensal
-- [ ] Lembretes de vencimento
 
 ### Fase 5 — Cartão de crédito como fatura (#5)
 - [ ] Ciclo de fatura (fechamento/vencimento) usando campos já criados em `accounts`
