@@ -21,7 +21,7 @@ import {
   type UpdateRfData,
   type UpdateTxData,
 } from '../services/investmentService.js'
-import { getQuote, getDividendHistory } from '../services/quoteService.js'
+import { getQuote, getGenericQuote, getDividendHistory } from '../services/quoteService.js'
 import {
   addDividend,
   updateDividend,
@@ -136,10 +136,12 @@ const investmentRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(await getTaxReport(getUserId(request), targetYear))
   })
 
-  // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar)
+  // Cotação avulsa de um ticker (usado no autocomplete/preview ao cadastrar).
+  // ?generic=1 usa símbolo cru do Yahoo (cripto/moeda), ex: BTC-BRL, USDBRL=X
   app.get('/api/investments/quote/:ticker', async (request, reply) => {
     const { ticker } = request.params as { ticker: string }
-    const quote = await getQuote(ticker)
+    const { generic } = request.query as { generic?: string }
+    const quote = generic === '1' ? await getGenericQuote(ticker) : await getQuote(ticker)
     if (!quote) return reply.status(404).send({ code: 'NOT_FOUND', message: 'Cotação não encontrada.' })
     return reply.send(quote)
   })

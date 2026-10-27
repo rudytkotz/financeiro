@@ -87,14 +87,16 @@ export function useEvolution() {
   })
 }
 
-export function useQuotePreview(ticker: string) {
+export function useQuotePreview(ticker: string, generic = false) {
   return useQuery<Quote>({
-    queryKey: ['quote', ticker],
+    queryKey: ['quote', ticker, generic],
     queryFn: async () => {
-      const { data } = await api.get(`/api/investments/quote/${ticker}`)
+      const { data } = await api.get(`/api/investments/quote/${encodeURIComponent(ticker)}`, {
+        params: generic ? { generic: '1' } : undefined,
+      })
       return data
     },
-    enabled: ticker.trim().length >= 4,
+    enabled: ticker.trim().length >= 3,
     retry: false,
     staleTime: 5 * 60 * 1000,
   })

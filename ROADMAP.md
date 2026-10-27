@@ -79,29 +79,34 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 
 ---
 
-## 🚧 Próximas fases
-
 ### Fase 9 — Mais classes de ativos (#10)
-- [ ] Cripto e moeda estrangeira (fontes gratuitas de cotação)
-- [ ] Tesouro Direto / previdência
+- Cotações de cripto (ex: BTC-BRL) e moeda (ex: USDBRL=X) via Yahoo Finance — gratuito, sem token (`getGenericQuote`/`getGenericQuotes`)
+- `getRvPositions` resolve cotação por classe: B3 usa `.SA`; cripto/moeda usam símbolo cru
+- Novas classes `cripto` e `moeda` no tipo `RvAssetClass` e no modal de cadastro (com preview de cotação genérica)
+- Endpoint de preview aceita `?generic=1`
+- Pendente: Tesouro Direto com marcação a mercado e previdência (requerem fontes específicas — avaliar depois)
 
-### Fase 10 — Proventos projetados / calendário (#11)
-- [ ] Projeção de proventos futuros e yield on cost
-- [ ] Calendário de pagamentos
-
-### Fase 11 — Recuperação de senha via Telegram (#12) ✅
+### Fase 11 — Recuperação de senha via Telegram (#12)
 - Comando `/novasenha <nova>` no bot: redefine a senha para quem já tem o chat vinculado (prova de posse)
 - Validação de tamanho e apagamento da mensagem com a senha (quando o bot tem permissão)
 - 100% gratuito (sem e-mail transacional)
 
-### Fase 12 — Exportação e relatórios (#14) ✅
+### Fase 12 — Exportação e relatórios (#14)
 - `exportService` gera CSV (separador `;`, BOM UTF-8 para Excel pt-BR) com categoria, dependente, conta, parcela etc.
 - Rota `GET /api/export/transactions.csv?month=`
 - Botão de exportar na aba Transações (download via blob com token de auth)
 - Pendente: relatórios anuais/comparativos (pode entrar numa fase futura se desejado)
 
-### Fase 13 — PWA instalável (#15) ✅
+### Fase 13 — PWA instalável (#15)
 - `manifest.webmanifest` + ícone SVG + `theme-color`
 - Service worker (`sw.js`) com cache do app shell e estratégia network-first para navegação / cache-first para assets
 - Registro do SW apenas em produção (não interfere no HMR)
 - App instalável com ícone na home e funcionamento básico offline
+
+---
+
+## 🚧 Próximas fases
+
+### Fase 10 — Proventos projetados / calendário (#11)
+- [ ] Projeção de proventos futuros e yield on cost
+- [ ] Calendário de pagamentos

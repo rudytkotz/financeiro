@@ -2,7 +2,7 @@ import { eq, and, asc } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
-import { getQuotes } from './quoteService.js'
+import { getQuotes, getGenericQuotes } from './quoteService.js'
 import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m, getIbovMonthlySeries } from './rateService.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
 
@@ -390,15 +390,29 @@ export async function getRvPositions(userId: string): Promise<RvPosition[]> {
     txsByInvestment.set(tx.investmentId, arr)
   }
 
-  // Buscar cotações de todos os tickers de uma vez
-  const tickers = rvInvestments.map(i => i.ticker).filter((t): t is string => !!t)
-  const quotes = await getQuotes(tickers)
+  // Classes que usam símbolo "cru" do Yahoo (cripto e moeda) em vez do sufixo .SA da B3
+  const GENERIC_CLASSES = new Set(['cripto', 'moeda'])
+
+  // Separar tickers por fonte de cotação
+  const b3Tickers = rvInvestments
+    .filter((i) => i.ticker && !GENERIC_CLASSES.has(i.assetClass ?? ''))
+    .map((i) => i.ticker!)
+  const genericTickers = rvInvestments
+    .filter((i) => i.ticker && GENERIC_CLASSES.has(i.assetClass ?? ''))
+    .map((i) => i.ticker!)
+
+  const [b3Quotes, genericQuotes] = await Promise.all([
+    getQuotes(b3Tickers),
+    getGenericQuotes(genericTickers),
+  ])
 
   return rvInvestments.map((investment) => {
     const txs = txsByInvestment.get(investment.id) ?? []
     const { quantity, averagePrice, investedTotal } = computePosition(txs)
 
-    const quote = investment.ticker ? quotes.get(investment.ticker.toUpperCase()) : undefined
+    const isGeneric = GENERIC_CLASSES.has(investment.assetClass ?? '')
+    const quoteMap = isGeneric ? genericQuotes : b3Quotes
+    const quote = investment.ticker ? quoteMap.get(investment.ticker.toUpperCase()) : undefined
     const currentPrice = quote ? Math.round(quote.price * 100) : null // reais → centavos
     const currentvalueTotal = currentPrice !== null ? currentPrice * quantity : null
     const profitLoss = currentvalueTotal !== null ? currentvalueTotal - investedTotal : null

@@ -197,6 +197,68 @@ export async function getQuote(ticker: string): Promise<Quote | null> {
   return quotes.get(normalizeTicker(ticker)) ?? null
 }
 
+/**
+ * Busca a cotação de um símbolo "cru" do Yahoo (sem o sufixo .SA da B3).
+ * Usado para cripto (ex: BTC-BRL, ETH-BRL) e moedas (ex: USDBRL=X, EURBRL=X).
+ * Gratuito e sem token. Resultado em cache (TTL).
+ */
+export async function getGenericQuote(symbol: string): Promise<Quote | null> {
+  const sym = symbol.trim().toUpperCase()
+  if (!sym) return null
+
+  const cacheKey = `raw:${sym}`
+  const now = Date.now()
+  const cached = cache.get(cacheKey)
+  if (cached && now - cached.fetchedAt < CACHE_TTL_MS) return cached.quote
+
+  try {
+    const url = `${YAHOO_BASE}/${encodeURIComponent(sym)}?interval=1d&range=1d`
+    const resp = await fetch(url, {
+      headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; FinanceiroApp/1.0)' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!resp.ok) return null
+
+    const data = await resp.json() as {
+      chart?: { result?: Array<{ meta?: {
+        regularMarketPrice?: number; chartPreviousClose?: number; previousClose?: number
+        longName?: string; shortName?: string; regularMarketTime?: number
+      } }> }
+    }
+
+    const meta = data.chart?.result?.[0]?.meta
+    if (!meta || typeof meta.regularMarketPrice !== 'number') return null
+
+    const price = meta.regularMarketPrice
+    const previousClose = meta.chartPreviousClose ?? meta.previousClose ?? price
+    const change = previousClose > 0 ? ((price - previousClose) / previousClose) * 100 : 0
+
+    const quote: Quote = {
+      ticker: sym,
+      price,
+      change: Math.round(change * 100) / 100,
+      previousClose,
+      name: meta.longName ?? meta.shortName ?? null,
+      updatedAt: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null,
+    }
+    cache.set(cacheKey, { quote, fetchedAt: now })
+    return quote
+  } catch {
+    return null
+  }
+}
+
+/** Busca várias cotações "cruas" (cripto/moeda) em paralelo. */
+export async function getGenericQuotes(symbols: string[]): Promise<Map<string, Quote>> {
+  const result = new Map<string, Quote>()
+  const unique = [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))]
+  const fetched = await Promise.all(unique.map(async (s) => ({ s, q: await getGenericQuote(s) })))
+  for (const { s, q } of fetched) {
+    if (q) result.set(s, q)
+  }
+  return result
+}
+
 export interface DividendEvent {
   date: string   // YYYY-MM-DD
   amount: number // reais por cota/ação (float)

@@ -185,7 +185,7 @@ export interface Import {
 // Investimentos
 
 export type InvestmentType = 'renda_variavel' | 'renda_fixa'
-export type RvAssetClass = 'acao' | 'fii' | 'etf' | 'bdr'
+export type RvAssetClass = 'acao' | 'fii' | 'etf' | 'bdr' | 'cripto' | 'moeda'
 export type RfAssetClass = 'cdb' | 'tesouro' | 'lci' | 'lca' | 'debenture' | 'outro'
 export type RateType = 'pos_cdi' | 'prefixado' | 'ipca_mais'
 

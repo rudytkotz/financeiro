@@ -8,7 +8,12 @@ const ASSET_CLASSES: Array<{ value: RvAssetClass; label: string }> = [
   { value: 'fii', label: 'FII' },
   { value: 'etf', label: 'ETF' },
   { value: 'bdr', label: 'BDR' },
+  { value: 'cripto', label: 'Cripto' },
+  { value: 'moeda', label: 'Moeda' },
 ]
+
+// Classes cujas cotações vêm de símbolos "crus" do Yahoo (sem .SA)
+const GENERIC_CLASSES = new Set<RvAssetClass>(['cripto', 'moeda'])
 
 function brlToCents(value: string): number | null {
   const n = Number(value.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.'))
@@ -28,7 +33,8 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [error, setError] = useState('')
 
-  const { data: quote, isFetching: loadingQuote, isError: quoteError } = useQuotePreview(ticker.toUpperCase())
+  const isGeneric = GENERIC_CLASSES.has(assetClass)
+  const { data: quote, isFetching: loadingQuote, isError: quoteError } = useQuotePreview(ticker.toUpperCase(), isGeneric)
 
   // Auto-preencher o nome com o da cotação, a menos que o usuário tenha editado manualmente
   useEffect(() => {
@@ -37,8 +43,10 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
     }
   }, [quote, nameEditedManually])
 
-  // Inferir o tipo de ativo pelo padrão do ticker (FIIs terminam em 11)
+  // Inferir o tipo de ativo pelo padrão do ticker (FIIs terminam em 11).
+  // Não sobrescreve se o usuário já escolheu cripto/moeda.
   useEffect(() => {
+    if (GENERIC_CLASSES.has(assetClass)) return
     const t = ticker.trim().toUpperCase()
     if (/\d{2}$/.test(t) && t.endsWith('11')) {
       setAssetClass('fii')
@@ -47,7 +55,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
     } else if (/[3-8]$/.test(t)) {
       setAssetClass('acao')
     }
-  }, [ticker])
+  }, [ticker, assetClass])
 
   useEffect(() => {
     if (open) {
@@ -103,10 +111,15 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
             <input
               value={ticker}
               onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              placeholder="Ex: PETR4, HGLG11"
+              placeholder={isGeneric ? (assetClass === 'cripto' ? 'Ex: BTC-BRL, ETH-BRL' : 'Ex: USDBRL=X, EURBRL=X') : 'Ex: PETR4, HGLG11'}
               autoFocus
               className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-emerald-400"
             />
+            {isGeneric && (
+              <p className="mt-1 text-[11px] text-gray-400">
+                {assetClass === 'cripto' ? 'Use o par com BRL (ex: BTC-BRL).' : 'Use o par de câmbio (ex: USDBRL=X).'}
+              </p>
+            )}
             {loadingQuote && <p className="mt-1 text-xs text-gray-400">Buscando ativo...</p>}
             {quote && (
               <div className="mt-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs">
@@ -142,7 +155,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
 
           <div>
             <label className="mb-1 block text-sm font-medium">Tipo</label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {ASSET_CLASSES.map((ac) => (
                 <button
                   key={ac.value}
