@@ -5,6 +5,10 @@ import { eq, sql } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
 import { db } from '../db/index.js'
 import { users, telegramLinks, transactions, dependents } from '../db/schema.js'
+import { getAlerts, formatAlertsMessage } from './alertService.js'
+
+// Referência ao bot em nível de módulo para permitir envio proativo de alertas
+let botInstance: any = null
 
 const PAYMENT_PREFIXES: Record<string, string> = {
   pix: 'pix',
@@ -89,6 +93,7 @@ export function startTelegramBot() {
   }
 
   const bot = new TelegramBot(token, { polling: true })
+  botInstance = bot
   console.log('🤖 Telegram bot started')
 
   // /start command
@@ -98,7 +103,8 @@ export function startTelegramBot() {
       `Comandos:\n` +
       `• /vincular usuario senha — vincular conta\n` +
       `• /desvincular — remover vínculo\n` +
-      `• /status — ver conta vinculada\n\n` +
+      `• /status — ver conta vinculada\n` +
+      `• /alertas — ver seus alertas financeiros\n\n` +
       `Para lançar transação, envie:\n` +
       `• \`150,50 ifood\` — crédito\n` +
       `• \`pix 800 aluguel\` — pix\n` +
@@ -177,6 +183,29 @@ export function startTelegramBot() {
     bot.sendMessage(msg.chat.id, `✅ Vinculado como: *${user?.username ?? 'desconhecido'}*`, { parse_mode: 'Markdown' })
   })
 
+  // /alertas command — alertas financeiros sob demanda
+  bot.onText(/\/alertas/, async (msg: any) => {
+    const chatId = String(msg.chat.id)
+    const [link] = await db
+      .select({ userId: telegramLinks.userId })
+      .from(telegramLinks)
+      .where(eq(telegramLinks.chatId, chatId))
+      .limit(1)
+
+    if (!link) {
+      bot.sendMessage(msg.chat.id, '❌ Nenhuma conta vinculada. Use /vincular usuario senha')
+      return
+    }
+
+    try {
+      const alerts = await getAlerts(link.userId)
+      bot.sendMessage(msg.chat.id, formatAlertsMessage(alerts), { parse_mode: 'Markdown' })
+    } catch (err) {
+      console.error('Telegram /alertas error:', err)
+      bot.sendMessage(msg.chat.id, '❌ Erro ao buscar alertas. Tente novamente.')
+    }
+  })
+
   // Transaction messages (not commands)
   bot.on('message', async (msg: any) => {
     if (!msg.text || msg.text.startsWith('/')) return
@@ -250,4 +279,32 @@ export function startTelegramBot() {
       bot.sendMessage(msg.chat.id, '❌ Erro ao salvar transação. Tente novamente.')
     }
   })
+}
+
+/**
+ * Envia os alertas atuais para todos os usuários com chat do Telegram vinculado.
+ * Só envia mensagem se houver ao menos um alerta (evita spam diário).
+ * Retorna quantos usuários receberam alerta.
+ *
+ * Pode ser disparado por um agendador externo via `POST /api/alerts/dispatch`.
+ */
+export async function dispatchAlertsToAllUsers(): Promise<{ notified: number }> {
+  if (!botInstance) return { notified: 0 }
+
+  const links = await db
+    .select({ chatId: telegramLinks.chatId, userId: telegramLinks.userId })
+    .from(telegramLinks)
+
+  let notified = 0
+  for (const link of links) {
+    try {
+      const alerts = await getAlerts(link.userId)
+      if (alerts.length === 0) continue
+      await botInstance.sendMessage(Number(link.chatId), formatAlertsMessage(alerts), { parse_mode: 'Markdown' })
+      notified++
+    } catch (err) {
+      console.error('Falha ao enviar alertas para chat', link.chatId, err)
+    }
+  }
+  return { notified }
 }

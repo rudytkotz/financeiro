@@ -6,9 +6,10 @@ import { useDependents } from '@/hooks/useDependents'
 import { useCategories } from '@/hooks/useCategories'
 import { usePortfolioSummary } from '@/hooks/useInvestments'
 import { useFinancialHealth } from '@/hooks/useFinancialHealth'
+import { useAlerts } from '@/hooks/useAlerts'
 import { useSetIncome } from '@/hooks/useMutations'
-import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight, Activity } from 'lucide-react'
-import type { PortfolioSummary, FinancialHealth } from '@financeiro/shared'
+import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight, Activity, Bell } from 'lucide-react'
+import type { PortfolioSummary, FinancialHealth, Alert } from '@financeiro/shared'
 import { Line, ComposedChart } from 'recharts'
 
 const CATEGORY_COLORS = [
@@ -57,6 +58,7 @@ export default function DashboardPage() {
   const { data: categories } = useCategories()
   const { data: portfolio } = usePortfolioSummary()
   const { data: health } = useFinancialHealth()
+  const { data: alerts } = useAlerts()
 
   const categoryColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -90,6 +92,9 @@ export default function DashboardPage() {
           aria-label="Selecionar mês"
         />
       </div>
+
+      {/* Alertas financeiros */}
+      <AlertsBanner alerts={alerts} />
 
       {isLoading && <p className="text-gray-500">Carregando...</p>}
 
@@ -309,6 +314,34 @@ export default function DashboardPage() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Banner de alertas
+// ---------------------------------------------------------------------------
+
+function AlertsBanner({ alerts }: { alerts?: Alert[] }) {
+  if (!alerts || alerts.length === 0) return null
+
+  const styleFor = (s: Alert['severity']) =>
+    s === 'danger'
+      ? 'border-red-200 bg-red-50 text-red-700'
+      : s === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-blue-200 bg-blue-50 text-blue-700'
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+        <Bell className="h-4 w-4" /> Alertas
+      </div>
+      {alerts.map((a, i) => (
+        <div key={i} className={`rounded-lg border px-4 py-2.5 text-sm ${styleFor(a.severity)}`}>
+          {a.message}
+        </div>
+      ))}
     </div>
   )
 }

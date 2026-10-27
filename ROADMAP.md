@@ -70,12 +70,16 @@ Itens explicitamente **fora de escopo** por decisão do usuário:
 - Rota `GET /api/dashboard/health`
 - Seção "Saúde financeira" no Painel: indicadores (taxa de poupança, gasto médio, sobra média, metas) + gráfico de projeção (saldo mensal + acumulado)
 
+### Fase 8 — Alertas via Telegram (#8)
+- `alertService`: detecta orçamento estourado/quase no limite, contas recorrentes a vencer (próximos 5 dias) e metas atingidas
+- Comando `/alertas` no bot (sob demanda) e envio proativo via `dispatchAlertsToAllUsers`
+- Rotas: `GET /api/alerts` (app) e `POST /api/alerts/dispatch` (admin; para agendador externo gratuito)
+- Banner de alertas no Painel (cores por severidade)
+- Observação: o envio automático diário depende de um agendador externo chamando `/api/alerts/dispatch` (sem cron interno para manter custo zero)
+
 ---
 
 ## 🚧 Próximas fases
-
-### Fase 8 — Alertas via Telegram (#8)
-- [ ] Bot envia alertas: orçamento estourado, conta a vencer, meta atingida
 
 ### Fase 9 — Mais classes de ativos (#10)
 - [ ] Cripto e moeda estrangeira (fontes gratuitas de cotação)

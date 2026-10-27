@@ -108,6 +108,13 @@ export interface FinancialHealth {
   monthsAnalyzed: number
 }
 
+// Alertas
+export interface Alert {
+  kind: 'budget' | 'bill' | 'goal'
+  severity: 'info' | 'warning' | 'danger'
+  message: string
+}
+
 export interface Category {
   id: string
   name: string           // max 50 chars
