@@ -112,7 +112,7 @@ export async function listContributions(goalId: string, userId: string): Promise
   return db
     .select()
     .from(goalContributions)
-    .where(eq(goalContributions.goalId, goalId))
+    .where(and(eq(goalContributions.goalId, goalId), eq(goalContributions.userId, userId)))
     .orderBy(desc(goalContributions.date))
 }
 
@@ -150,7 +150,7 @@ export async function addContribution(goalId: string, data: AddContributionData,
     const [g] = await tx
       .update(goals)
       .set({ currentAmount: newCurrent })
-      .where(eq(goals.id, goalId))
+      .where(and(eq(goals.id, goalId), eq(goals.userId, userId)))
       .returning()
     return g
   })

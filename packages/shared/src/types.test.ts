@@ -18,6 +18,7 @@ describe('shared types', () => {
       installmentCurrent: null,
       installmentTotal: null,
       accountId: null,
+      transferId: null,
       kind: 'despesa',
       recurringId: null,
       createdAt: '2024-01-01T00:00:00Z',

@@ -3,6 +3,7 @@ import { db } from '../db/index.js'
 import { transactions, categories, dependents, imports } from '../db/schema.js'
 import type { Transaction } from '../db/schema.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
+import { assertAccountOwnership, assertDependentOwnership } from '../lib/ownership.js'
 
 export type { ServiceError }
 
@@ -76,9 +77,9 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
   const { month, categoryId, startDate, endDate, sort } = params
   const conditions: ReturnType<typeof eq>[] = []
 
-  // Filter by user (include legacy transactions without userId)
+  // Filtra estritamente pelas transações do usuário (isolamento total)
   if (userId) {
-    conditions.push(or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    conditions.push(eq(transactions.userId, userId))
   }
 
   // Filtro por mês: usar referenceMonth diretamente
@@ -183,6 +184,12 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
     throw makeError(422, 'CATEGORY_NOT_FOUND', 'Categoria não encontrada.')
   }
 
+  // Garantir que conta e dependente (se informados) pertencem ao usuário
+  if (userId) {
+    await assertAccountOwnership(data.accountId, userId)
+    await assertDependentOwnership(data.dependentId, userId)
+  }
+
   // Validar installmentTotal (se fornecido). Receita é sempre à vista.
   const parsedInstallments = kind === 'receita' ? 1 : (data.installmentTotal ?? 1)
   if (!Number.isInteger(parsedInstallments) || parsedInstallments < 1 || parsedInstallments > 24) {
@@ -264,7 +271,7 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
 export async function updateTransaction(id: string, data: UpdateTransactionData, userId?: string): Promise<Transaction> {
   // Verificar se a transação existe e pertence ao usuário
   const whereClause = userId
-    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    ? and(eq(transactions.id, id), eq(transactions.userId, userId))
     : eq(transactions.id, id)
 
   const [existing] = await db
@@ -349,13 +356,15 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
     updates.paymentMethod = data.paymentMethod
   }
 
-  // dependentId (se fornecido)
+  // dependentId (se fornecido) — valida ownership
   if (data.dependentId !== undefined) {
+    if (userId) await assertDependentOwnership(data.dependentId, userId)
     updates.dependentId = data.dependentId
   }
 
-  // accountId (se fornecido)
+  // accountId (se fornecido) — valida ownership
   if (data.accountId !== undefined) {
+    if (userId) await assertAccountOwnership(data.accountId, userId)
     updates.accountId = data.accountId
   }
 
@@ -365,7 +374,9 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
   const [updated] = await db
     .update(transactions)
     .set(updates)
-    .where(eq(transactions.id, id))
+    .where(userId
+      ? and(eq(transactions.id, id), eq(transactions.userId, userId))
+      : eq(transactions.id, id))
     .returning()
 
   // Propagar categoryId e dependentId para todas as parcelas da mesma compra
@@ -400,9 +411,7 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
               sql`${transactions.id} != ${id}`,
               eq(transactions.description, existing.description),
               eq(transactions.installmentTotal, existing.installmentTotal),
-              userId
-                ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
-                : sql`1=1`
+              userId ? eq(transactions.userId, userId) : sql`1=1`
             )
           )
       }
@@ -418,7 +427,7 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
  */
 export async function deleteTransaction(id: string, userId?: string): Promise<void> {
   const whereClause = userId
-    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    ? and(eq(transactions.id, id), eq(transactions.userId, userId))
     : eq(transactions.id, id)
 
   const [existing] = await db
@@ -431,7 +440,11 @@ export async function deleteTransaction(id: string, userId?: string): Promise<vo
     throw makeError(404, 'NOT_FOUND', 'Transação não encontrada.')
   }
 
-  await db.delete(transactions).where(eq(transactions.id, id))
+  await db.delete(transactions).where(
+    userId
+      ? and(eq(transactions.id, id), eq(transactions.userId, userId))
+      : eq(transactions.id, id),
+  )
 }
 
 /**
@@ -444,7 +457,7 @@ export async function deleteAllByMonth(month: string, userId?: string): Promise<
   }
 
   const conditions = [eq(transactions.referenceMonth, month)]
-  if (userId) conditions.push(or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+  if (userId) conditions.push(eq(transactions.userId, userId))
 
   const finalFilter = conditions.length > 1 ? and(...conditions)! : conditions[0]
 
@@ -455,7 +468,7 @@ export async function deleteAllByMonth(month: string, userId?: string): Promise<
 
   // Also delete the import records for that month + user
   if (userId) {
-    await db.delete(imports).where(and(eq(imports.referenceMonth, month), or(eq(imports.userId, userId), sql`${imports.userId} IS NULL`)!))
+    await db.delete(imports).where(and(eq(imports.referenceMonth, month), eq(imports.userId, userId)))
   } else {
     await db.delete(imports).where(eq(imports.referenceMonth, month))
   }
@@ -494,9 +507,9 @@ export async function associateDependent(
 ): Promise<{ transaction: Transaction } | { conflict: AssociateDependentConflict }> {
   const { dependentId, force } = data
 
-  // Buscar a transação (restrita ao usuário; inclui legado sem userId)
+  // Buscar a transação (restrita ao usuário)
   const txWhere = userId
-    ? and(eq(transactions.id, id), or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!)
+    ? and(eq(transactions.id, id), eq(transactions.userId, userId))
     : eq(transactions.id, id)
 
   const [existing] = await db
@@ -514,7 +527,7 @@ export async function associateDependent(
     const [updated] = await db
       .update(transactions)
       .set({ dependentId: null, updatedAt: new Date() })
-      .where(eq(transactions.id, id))
+      .where(userId ? and(eq(transactions.id, id), eq(transactions.userId, userId)) : eq(transactions.id, id))
       .returning()
 
     // Propagar para todas as parcelas da mesma compra
@@ -539,9 +552,7 @@ export async function associateDependent(
               sql`${transactions.id} != ${id}`,
               eq(transactions.description, existing.description),
               eq(transactions.installmentTotal, existing.installmentTotal),
-              userId
-                ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
-                : sql`1=1`
+              userId ? eq(transactions.userId, userId) : sql`1=1`
             )
           )
       }
@@ -580,7 +591,7 @@ export async function associateDependent(
   const [updated] = await db
     .update(transactions)
     .set({ dependentId, updatedAt: new Date() })
-    .where(eq(transactions.id, id))
+    .where(userId ? and(eq(transactions.id, id), eq(transactions.userId, userId)) : eq(transactions.id, id))
     .returning()
 
   // Propagar para todas as parcelas da mesma compra
@@ -605,13 +616,132 @@ export async function associateDependent(
             sql`${transactions.id} != ${id}`,
             eq(transactions.description, existing.description),
             eq(transactions.installmentTotal, existing.installmentTotal),
-            userId
-              ? or(eq(transactions.userId, userId), sql`${transactions.userId} IS NULL`)!
-              : sql`1=1`
+            userId ? eq(transactions.userId, userId) : sql`1=1`
           )
         )
     }
   }
 
   return { transaction: updated }
+}
+
+// ---------------------------------------------------------------------------
+// Transferências entre contas
+// ---------------------------------------------------------------------------
+
+import { randomUUID } from 'node:crypto'
+import { accounts as accountsTable } from '../db/schema.js'
+
+export interface CreateTransferData {
+  fromAccountId: string
+  toAccountId: string
+  amount: number        // centavos, positivo
+  date: string          // YYYY-MM-DD
+  description?: string
+}
+
+export interface TransferResult {
+  transferId: string
+  from: Transaction
+  to: Transaction
+}
+
+/**
+ * Cria uma transferência entre duas contas do usuário.
+ *
+ * Gera duas transações pareadas por transferId e marcadas com kind 'transfer':
+ *  - Saída na conta de origem (amount positivo → reduz o saldo da origem)
+ *  - Entrada na conta de destino (amount negativo → aumenta o saldo do destino)
+ *
+ * O kind 'transfer' mantém esses lançamentos fora dos totais de despesas e
+ * receitas nos relatórios (que somam apenas 'despesa' e 'receita').
+ */
+export async function createTransfer(data: CreateTransferData, userId: string): Promise<TransferResult> {
+  const { fromAccountId, toAccountId } = data
+
+  if (!fromAccountId || !toAccountId) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Informe a conta de origem e a de destino.')
+  }
+  if (fromAccountId === toAccountId) {
+    throw makeError(422, 'VALIDATION_ERROR', 'A origem e o destino devem ser contas diferentes.')
+  }
+  if (!data.date || !isValidDate(data.date)) {
+    throw makeError(422, 'VALIDATION_ERROR', 'A data é obrigatória e deve estar no formato YYYY-MM-DD.')
+  }
+  const amount = Math.abs(data.amount)
+  if (!Number.isInteger(amount) || amount === 0 || amount > 999999999) {
+    throw makeError(422, 'VALIDATION_ERROR', 'O valor deve ser um inteiro positivo (máx R$ 9.999.999,99).')
+  }
+
+  // Valida que ambas as contas pertencem ao usuário
+  const owned = await db
+    .select({ id: accountsTable.id, name: accountsTable.name })
+    .from(accountsTable)
+    .where(and(eq(accountsTable.userId, userId), or(eq(accountsTable.id, fromAccountId), eq(accountsTable.id, toAccountId))!))
+
+  const fromAcc = owned.find((a) => a.id === fromAccountId)
+  const toAcc = owned.find((a) => a.id === toAccountId)
+  if (!fromAcc || !toAcc) {
+    throw makeError(404, 'NOT_FOUND', 'Conta de origem ou destino não encontrada.')
+  }
+
+  const transferId = randomUUID()
+  const refMonth = data.date.substring(0, 7)
+  const baseDesc = data.description?.trim() || 'Transferência'
+
+  const result = await db.transaction(async (tx) => {
+    const [from] = await tx
+      .insert(transactions)
+      .values({
+        date: data.date,
+        description: `${baseDesc} → ${toAcc.name}`,
+        amount, // positivo: sai da origem (reduz saldo)
+        categoryId: null,
+        accountId: fromAccountId,
+        transferId,
+        kind: 'transfer',
+        source: 'manual',
+        referenceMonth: refMonth,
+        paymentMethod: 'outros',
+        userId,
+      })
+      .returning()
+
+    const [to] = await tx
+      .insert(transactions)
+      .values({
+        date: data.date,
+        description: `${baseDesc} ← ${fromAcc.name}`,
+        amount: -amount, // negativo: entra no destino (aumenta saldo)
+        categoryId: null,
+        accountId: toAccountId,
+        transferId,
+        kind: 'transfer',
+        source: 'manual',
+        referenceMonth: refMonth,
+        paymentMethod: 'outros',
+        userId,
+      })
+      .returning()
+
+    return { from, to }
+  })
+
+  return { transferId, from: result.from, to: result.to }
+}
+
+/**
+ * Remove uma transferência (as duas pontas) pelo transferId.
+ */
+export async function deleteTransfer(transferId: string, userId: string): Promise<void> {
+  const legs = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.transferId, transferId), eq(transactions.userId, userId)))
+
+  if (legs.length === 0) {
+    throw makeError(404, 'NOT_FOUND', 'Transferência não encontrada.')
+  }
+
+  await db.delete(transactions).where(and(eq(transactions.transferId, transferId), eq(transactions.userId, userId)))
 }

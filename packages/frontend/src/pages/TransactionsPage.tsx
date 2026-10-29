@@ -18,11 +18,12 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
   Search, Filter, Plus, X, ChevronLeft, ChevronRight,
-  ArrowLeftRight, Upload, Tag, Target, Repeat, Download,
+  ArrowLeftRight, Upload, Tag, Target, Repeat, Download, Users,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { ImportSection } from './ImportPage'
 import { CategoriesSection } from './CategoriesPage'
+import { DependentsSection } from './DependentsPage'
 import BudgetsSection from './BudgetsSection'
 import RecurringSection from './RecurringSection'
 import { cn } from '@/lib/utils'
@@ -92,15 +93,17 @@ type SortDir = 'asc' | 'desc'
 // ===========================================================================
 function TransactionsSection() {
   const location = useLocation()
-  const initialMonth = (location.state as { month?: string } | null)?.month ?? getCurrentMonth()
+  const navState = location.state as { month?: string; accountId?: string } | null
+  const initialMonth = navState?.month ?? getCurrentMonth()
   const [month, setMonth] = useState(initialMonth)
   const [categoryId, setCategoryId] = useState('')
   const [dependentId, setDependentId] = useState('')
+  const [accountId, setAccountId] = useState(navState?.accountId ?? '')
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('')
   const [searchText, setSearchText] = useState('')
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
-  const [showFilters, setShowFilters] = useState(false)
+  const [showFilters, setShowFilters] = useState(!!navState?.accountId)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
@@ -116,8 +119,13 @@ function TransactionsSection() {
   }, [month, categoryId])
 
   const { data: transactionsData, isLoading } = useTransactions(filterParams)
-  // Estabiliza a referência do array para não desestabilizar os useMemo abaixo
-  const rawTransactions = useMemo(() => transactionsData?.transactions ?? [], [transactionsData])
+  // Estabiliza a referência do array para não desestabilizar os useMemo abaixo.
+  // Transferências (kind 'transfer') não entram na lista de despesas/receitas —
+  // elas apenas movem dinheiro entre contas e têm sua própria visão.
+  const rawTransactions = useMemo(
+    () => (transactionsData?.transactions ?? []).filter((t) => (t as { kind?: string }).kind !== 'transfer'),
+    [transactionsData],
+  )
   const { data: categories } = useCategories()
   const { data: dependents } = useDependents()
   const { data: accounts } = useAccounts()
@@ -147,6 +155,7 @@ function TransactionsSection() {
       list = list.filter((t) => t.dependentId === dependentId)
     }
     if (paymentMethodFilter) list = list.filter((t) => (t as any).paymentMethod === paymentMethodFilter)
+    if (accountId) list = list.filter((t) => t.accountId === accountId)
     if (searchText.trim()) {
       const q = searchText.toLowerCase()
       list = list.filter((t) => t.description.toLowerCase().includes(q))
@@ -178,7 +187,7 @@ function TransactionsSection() {
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [rawTransactions, categoryId, dependentId, paymentMethodFilter, searchText, sortField, sortDir, categoryMap, dependents])
+  }, [rawTransactions, categoryId, dependentId, accountId, paymentMethodFilter, searchText, sortField, sortDir, categoryMap, dependents])
 
   const total = useMemo(() => transactions.reduce((s, t) => s + t.amount, 0), [transactions])
   const totalExpenses = useMemo(() => transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0), [transactions])
@@ -228,7 +237,7 @@ function TransactionsSection() {
       .sort((a, b) => b.total - a.total)
   }, [rawTransactions, dependents])
 
-  const activeFilterCount = [categoryId, dependentId, paymentMethodFilter, searchText].filter(Boolean).length
+  const activeFilterCount = [categoryId, dependentId, accountId, paymentMethodFilter, searchText].filter(Boolean).length
 
   // Handlers
   const handleSort = useCallback((field: SortField) => {
@@ -237,7 +246,7 @@ function TransactionsSection() {
       setSortDir(field === 'amount' || field === 'installment' ? 'desc' : 'asc'); return field
     })
   }, [])
-  const clearFilters = () => { setCategoryId(''); setDependentId(''); setPaymentMethodFilter(''); setSearchText('') }
+  const clearFilters = () => { setCategoryId(''); setDependentId(''); setAccountId(''); setPaymentMethodFilter(''); setSearchText('') }
   function handleOpenCreate() { setEditingTransaction(null); setModalOpen(true) }
   function handleCloseModal() { setModalOpen(false); setEditingTransaction(null) }
   async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; dependentId: string | null; accountId: string | null; kind: 'despesa' | 'receita'; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string }) {
@@ -272,7 +281,7 @@ function TransactionsSection() {
   return (
     <div className="space-y-5">
       {/* ── HEADER ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-bold text-gray-900 md:text-2xl">Transações</h1>
           <p className="text-xs text-gray-400 mt-0.5">{getMonthLabel(month)}</p>
@@ -490,6 +499,13 @@ function TransactionsSection() {
                 {(dependents ?? []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold text-gray-400 uppercase">Conta</label>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary">
+                <option value="">Todas</option>
+                {(accounts ?? []).map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
           </div>
         </div>
       )}
@@ -550,7 +566,7 @@ function TransactionsSection() {
 // ===========================================================================
 // PAGE WRAPPER — abas: Transações · Importar · Categorias
 // ===========================================================================
-type TabKey = 'transactions' | 'budget' | 'recurring' | 'import' | 'categories'
+type TabKey = 'transactions' | 'budget' | 'recurring' | 'import' | 'categories' | 'dependents'
 
 const TABS: { key: TabKey; label: string; icon: typeof ArrowLeftRight }[] = [
   { key: 'transactions', label: 'Transações', icon: ArrowLeftRight },
@@ -558,6 +574,7 @@ const TABS: { key: TabKey; label: string; icon: typeof ArrowLeftRight }[] = [
   { key: 'recurring', label: 'Recorrentes', icon: Repeat },
   { key: 'import', label: 'Importar', icon: Upload },
   { key: 'categories', label: 'Categorias', icon: Tag },
+  { key: 'dependents', label: 'Dependentes', icon: Users },
 ]
 
 export default function TransactionsPage() {
@@ -567,23 +584,25 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Abas */}
-      <div className="flex items-center gap-1 rounded-xl border border-gray-100 bg-white p-1 shadow-sm w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition',
-              tab === key
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
+      {/* Abas — roláveis horizontalmente no mobile */}
+      <div className="-mx-1 overflow-x-auto px-1 scrollbar-hide">
+        <div className="flex items-center gap-1 rounded-xl border border-gray-100 bg-white p-1 shadow-sm w-max">
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={cn(
+                'inline-flex flex-shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition sm:px-4',
+                tab === key
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+              )}
+            >
+              <Icon className="h-4 w-4 flex-shrink-0" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === 'transactions' && <TransactionsSection />}
@@ -591,6 +610,7 @@ export default function TransactionsPage() {
       {tab === 'recurring' && <RecurringSection />}
       {tab === 'import' && <ImportSection />}
       {tab === 'categories' && <CategoriesSection />}
+      {tab === 'dependents' && <DependentsSection />}
     </div>
   )
 }

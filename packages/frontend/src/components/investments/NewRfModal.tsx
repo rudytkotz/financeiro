@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCreateRfInvestment, useUpdateRfInvestment } from '@/hooks/useInvestments'
+import { useAccounts } from '@/hooks/useAccounts'
+import AccountSelect from '@/components/AccountSelect'
 import type { RfAssetClass, RateType, Investment } from '@financeiro/shared'
 import { X } from 'lucide-react'
 
@@ -27,6 +29,7 @@ function brlToCents(value: string): number | null {
 export default function NewRfModal({ open, onClose, editing }: { open: boolean; onClose: () => void; editing?: Investment | null }) {
   const createMutation = useCreateRfInvestment()
   const updateMutation = useUpdateRfInvestment()
+  const { data: accounts } = useAccounts()
   const isEdit = !!editing
   const [name, setName] = useState('')
   const [assetClass, setAssetClass] = useState<RfAssetClass>('cdb')
@@ -35,6 +38,7 @@ export default function NewRfModal({ open, onClose, editing }: { open: boolean; 
   const [maturityDate, setMaturityDate] = useState('')
   const [rateType, setRateType] = useState<RateType>('pos_cdi')
   const [rateValue, setRateValue] = useState('')
+  const [accountId, setAccountId] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -47,8 +51,9 @@ export default function NewRfModal({ open, onClose, editing }: { open: boolean; 
         setMaturityDate(editing.maturityDate ?? '')
         setRateType((editing.rateType as RateType) ?? 'pos_cdi')
         setRateValue(editing.rateValue !== null ? (editing.rateValue / 100).toString() : '')
+        setAccountId(editing.accountId ?? '')
       } else {
-        setName(''); setAssetClass('cdb'); setAmount(''); setMaturityDate(''); setRateType('pos_cdi'); setRateValue('')
+        setName(''); setAssetClass('cdb'); setAmount(''); setMaturityDate(''); setRateType('pos_cdi'); setRateValue(''); setAccountId('')
         setApplicationDate(new Date().toISOString().slice(0, 10))
       }
       setError('')
@@ -74,6 +79,7 @@ export default function NewRfModal({ open, onClose, editing }: { open: boolean; 
       maturityDate: maturityDate || null,
       rateType,
       rateValue: Math.round(rate * 100), // % → % * 100
+      accountId: accountId || null,
     }
 
     try {
@@ -156,6 +162,19 @@ export default function NewRfModal({ open, onClose, editing }: { open: boolean; 
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" />
             </div>
           </div>
+
+          {(accounts ?? []).length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Conta / corretora <span className="text-[10px] font-normal text-gray-400">(opcional)</span></label>
+              <AccountSelect
+                accounts={accounts ?? []}
+                value={accountId}
+                onChange={setAccountId}
+                emptyLabel="Não vincular"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+              />
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50">Cancelar</button>

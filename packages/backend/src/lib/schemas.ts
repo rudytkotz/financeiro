@@ -44,6 +44,14 @@ export const associateDependentSchema = z.object({
   force: z.boolean().optional(),
 })
 
+export const createTransferSchema = z.object({
+  fromAccountId: uuid,
+  toAccountId: uuid,
+  amount: z.number().int().positive('O valor deve ser maior que zero.'),
+  date: dateISO,
+  description: z.string().trim().max(255).optional(),
+})
+
 export const listTransactionsQuerySchema = z.object({
   month: month.optional(),
   categoryId: uuid.optional(),
@@ -92,6 +100,10 @@ export const createAccountSchema = z.object({
   closingDay: day.nullable().optional(),
   dueDay: day.nullable().optional(),
   creditLimit: z.number().int().nonnegative().nullable().optional(),
+  // Conta pai (ex: cartão vinculado a uma conta corrente). Opcional.
+  parentAccountId: uuid.nullable().optional(),
+  // Dependente dono da conta. Opcional.
+  dependentId: uuid.nullable().optional(),
 })
 
 export const updateAccountSchema = createAccountSchema.partial().extend({

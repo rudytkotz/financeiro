@@ -1,8 +1,30 @@
 import { config } from 'dotenv'
 import { z } from 'zod'
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// Carrega o .env antes de validar
-config()
+// Carrega o .env antes de validar. Em monorepo, o backend roda com cwd em
+// packages/backend, mas o .env costuma ficar na raiz do projeto. Procuramos
+// o .env subindo a partir deste arquivo até achar um, com fallback no cwd.
+function loadDotenv() {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const candidates = [
+    resolve(process.cwd(), '.env'), // cwd (packages/backend) — tem prioridade
+    resolve(here, '../../.env'), // packages/backend/.env
+    resolve(here, '../../../../.env'), // raiz do monorepo
+  ]
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      config({ path })
+      return
+    }
+  }
+  // Nenhum arquivo encontrado: ainda tenta o comportamento padrão
+  config()
+}
+
+loadDotenv()
 
 /**
  * Schema das variáveis de ambiente. Falha rápido e com mensagem clara

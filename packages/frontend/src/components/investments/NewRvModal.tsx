@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useCreateRvInvestment, useQuotePreview } from '@/hooks/useInvestments'
+import { useAccounts } from '@/hooks/useAccounts'
+import AccountSelect from '@/components/AccountSelect'
 import type { RvAssetClass } from '@financeiro/shared'
 import { X, TrendingUp } from 'lucide-react'
 
@@ -23,6 +25,7 @@ function brlToCents(value: string): number | null {
 
 export default function NewRvModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const createMutation = useCreateRvInvestment()
+  const { data: accounts } = useAccounts()
   const [ticker, setTicker] = useState('')
   const [name, setName] = useState('')
   const [nameEditedManually, setNameEditedManually] = useState(false)
@@ -31,6 +34,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
   const [price, setPrice] = useState('')
   const [fees, setFees] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [accountId, setAccountId] = useState('')
   const [error, setError] = useState('')
 
   const isGeneric = GENERIC_CLASSES.has(assetClass)
@@ -60,7 +64,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
   useEffect(() => {
     if (open) {
       setTicker(''); setName(''); setNameEditedManually(false); setAssetClass('acao')
-      setQuantity(''); setPrice(''); setFees(''); setError('')
+      setQuantity(''); setPrice(''); setFees(''); setError(''); setAccountId('')
       setDate(new Date().toISOString().slice(0, 10))
     }
   }, [open])
@@ -88,6 +92,7 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
         unitPrice: unitPrice ?? undefined,
         fees: fees ? (brlToCents(fees) ?? 0) : 0,
         date: qty && unitPrice ? date : undefined,
+        accountId: accountId || null,
       })
       onClose()
     } catch {
@@ -170,6 +175,19 @@ export default function NewRvModal({ open, onClose }: { open: boolean; onClose: 
               ))}
             </div>
           </div>
+
+          {(accounts ?? []).length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Conta / corretora <span className="text-[10px] font-normal text-gray-400">(opcional)</span></label>
+              <AccountSelect
+                accounts={accounts ?? []}
+                value={accountId}
+                onChange={setAccountId}
+                emptyLabel="Não vincular"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </div>
+          )}
 
           <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-2">Operação inicial (opcional)</p>

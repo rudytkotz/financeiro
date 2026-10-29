@@ -22,6 +22,7 @@ const sampleTransaction: Transaction = {
   installmentCurrent: null,
   installmentTotal: null,
   accountId: null,
+  transferId: null,
   kind: 'despesa',
   recurringId: null,
   createdAt: '2024-03-15T10:00:00Z',

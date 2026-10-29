@@ -17,6 +17,7 @@ import {
   useDeleteDividend,
   useDividendForecast,
 } from '@/hooks/useInvestments'
+import { useAccounts } from '@/hooks/useAccounts'
 import type { RvPosition } from '@financeiro/shared'
 import {
   TrendingUp, TrendingDown, PieChart as PieIcon, Plus, Trash2, Landmark,
@@ -77,8 +78,15 @@ export default function InvestmentsPage() {
   const { data: maturityAlerts } = useMaturityAlerts()
   const { data: snapshots } = useSnapshots()
   const { data: rebalance } = useRebalance()
+  const { data: accounts } = useAccounts()
   const deleteMutation = useDeleteInvestment()
   const deleteDividendMutation = useDeleteDividend()
+
+  // Mapa id → nome da conta/corretora, para exibir junto de cada ativo
+  const accountNameById = useMemo(
+    () => new Map((accounts ?? []).map((a) => [a.id, a.name])),
+    [accounts],
+  )
 
   const [rvModalOpen, setRvModalOpen] = useState(false)
   const [rfModalOpen, setRfModalOpen] = useState(false)
@@ -534,6 +542,7 @@ export default function InvestmentsPage() {
                   </button>
                   {!collapsed && (
                     <RvTable positions={group.positions} loading={false} onOperate={setTxModalInvestment}
+                      accountNameById={accountNameById}
                       onEdit={setEditRvInvestment}
                       onDelete={(id, ticker) => { if (confirm(`Excluir ${ticker} e todas as operações?`)) deleteMutation.mutate(id) }} />
                   )}
@@ -546,6 +555,7 @@ export default function InvestmentsPage() {
 
       {tab === 'rf' && (
         <RfTable positions={rfPositions ?? []} loading={loadingRf}
+          accountNameById={accountNameById}
           onEdit={setEditRfInvestment}
           onDelete={(id, name) => { if (confirm(`Excluir ${name}?`)) deleteMutation.mutate(id) }} />
       )}
@@ -605,8 +615,9 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
   )
 }
 
-function RvTable({ positions, loading, onOperate, onEdit, onDelete }: {
+function RvTable({ positions, loading, onOperate, onEdit, onDelete, accountNameById }: {
   positions: RvPosition[]; loading: boolean
+  accountNameById: Map<string, string>
   onOperate: (p: RvPosition) => void; onEdit: (inv: Investment) => void; onDelete: (id: string, ticker: string) => void
 }) {
   if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-[3px] border-emerald-200 border-t-emerald-500" /></div>
@@ -632,6 +643,11 @@ function RvTable({ positions, loading, onOperate, onEdit, onDelete }: {
               <td className="px-4 py-3">
                 <div className="font-semibold text-gray-800">{pos.investment.ticker}</div>
                 <div className="text-[11px] text-gray-400 truncate max-w-[160px]">{pos.investment.name}</div>
+                {pos.investment.accountId && accountNameById.get(pos.investment.accountId) && (
+                  <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">
+                    <Wallet className="h-2.5 w-2.5" /> {accountNameById.get(pos.investment.accountId)}
+                  </div>
+                )}
               </td>
               <td className="px-4 py-3 text-right text-gray-600">{pos.quantity}</td>
               <td className="px-4 py-3 text-right text-gray-600">{fmt(pos.averagePrice)}</td>
@@ -671,8 +687,9 @@ function RvTable({ positions, loading, onOperate, onEdit, onDelete }: {
   )
 }
 
-function RfTable({ positions, loading, onEdit, onDelete }: {
+function RfTable({ positions, loading, onEdit, onDelete, accountNameById }: {
   positions: Array<import('@financeiro/shared').RfPosition>; loading: boolean
+  accountNameById: Map<string, string>
   onEdit: (inv: Investment) => void; onDelete: (id: string, name: string) => void
 }) {
   if (loading) return <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-[3px] border-violet-200 border-t-violet-500" /></div>
@@ -705,6 +722,11 @@ function RfTable({ positions, loading, onEdit, onDelete }: {
                     {RF_CLASS_LABELS[inv.assetClass ?? 'outro']}
                     {inv.maturityDate && ` · vence ${inv.maturityDate.split('-').reverse().join('/')}`}
                   </div>
+                  {inv.accountId && accountNameById.get(inv.accountId) && (
+                    <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-medium text-gray-500">
+                      <Wallet className="h-2.5 w-2.5" /> {accountNameById.get(inv.accountId)}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-gray-600">{rateLabel}</td>
                 <td className="px-4 py-3 text-right text-gray-600">{fmt(pos.investedAmount)}</td>

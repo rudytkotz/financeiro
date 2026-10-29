@@ -92,6 +92,14 @@ export default function TransactionModal({
   // Dependente principal — usado como default ao abrir o modal para nova transação
   const mainDependent = useMemo(() => dependents.find((d) => d.isMain), [dependents])
 
+  // Contas separadas por tipo para agrupar o seletor (cartões x contas)
+  const cardAccounts = useMemo(() => accounts.filter((a) => a.type === 'cartao'), [accounts])
+  const nonCardAccounts = useMemo(() => accounts.filter((a) => a.type !== 'cartao'), [accounts])
+  const accountName = useMemo(() => {
+    const byId = new Map(accounts.map((a) => [a.id, a.name]))
+    return (id: string) => byId.get(id) ?? ''
+  }, [accounts])
+
   // Initialize form when opening or when transaction changes
   useEffect(() => {
     if (open) {
@@ -102,7 +110,7 @@ export default function TransactionModal({
         setCategoryId(transaction.categoryId ?? '')
         setDependentId(transaction.dependentId ?? '')
         setAccountId(transaction.accountId ?? '')
-        setKind(transaction.kind ?? 'despesa')
+        setKind(transaction.kind === 'receita' ? 'receita' : 'despesa')
         setOperationType(detectOperationType(transaction.amount))
         setPaymentMethod((transaction as any).paymentMethod ?? 'credito')
         setInstallmentTotal(transaction.installmentTotal ?? 1)
@@ -392,10 +400,14 @@ export default function TransactionModal({
             </div>
           )}
 
-          {/* Conta / carteira */}
+          {/* Conta / cartão — integrado com a forma de pagamento.
+              No crédito, sugerimos os cartões; nos demais, as contas. */}
           {accounts.length > 0 && (
             <div>
-              <label htmlFor="tx-account" className="mb-1 block text-sm font-medium">Conta</label>
+              <label htmlFor="tx-account" className="mb-1 block text-sm font-medium">
+                {paymentMethod === 'credito' ? 'Cartão' : 'Conta'}
+                <span className="ml-1.5 text-[10px] font-normal text-gray-400">(opcional)</span>
+              </label>
               <select
                 id="tx-account"
                 value={accountId}
@@ -403,10 +415,28 @@ export default function TransactionModal({
                 className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Nenhuma</option>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
+                {cardAccounts.length > 0 && (
+                  <optgroup label="Cartões de crédito">
+                    {cardAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}{acc.parentAccountId ? ` (${accountName(acc.parentAccountId)})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {nonCardAccounts.length > 0 && (
+                  <optgroup label="Contas e carteiras">
+                    {nonCardAccounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>{acc.name}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
+              {paymentMethod === 'credito' && cardAccounts.length === 0 && (
+                <p className="mt-1 text-[11px] text-gray-400">
+                  Nenhum cartão cadastrado. Cadastre em Contas → Cartões para vincular.
+                </p>
+              )}
             </div>
           )}
 

@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react'
 import { FileUpload } from '../components/FileUpload'
 import { parseCsv, type CsvParseResult, type ParsedTransaction } from '../lib/parseCsv'
 import { useImportCsv, type ImportCsvPayload } from '../hooks/useMutations'
+import { useAccounts } from '../hooks/useAccounts'
+import AccountSelect from '../components/AccountSelect'
 import { AxiosError } from 'axios'
 import { Trash2 } from 'lucide-react'
 import { ImportsHistorySection } from './ImportsHistoryPage'
@@ -48,8 +50,10 @@ export function ImportSection() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [duplicateModal, setDuplicateModal] = useState<{ referenceMonth: string } | null>(null)
+  const [accountId, setAccountId] = useState('')
 
   const importCsv = useImportCsv()
+  const { data: accounts } = useAccounts()
 
   const buildPayload = (force: boolean): ImportCsvPayload => ({
     transactions: editableTransactions.map((tx) => ({
@@ -66,6 +70,7 @@ export function ImportSection() {
     })),
     referenceMonth,
     force,
+    accountId: accountId || null,
   })
 
   const handleFileAccepted = async (file: File) => {
@@ -198,18 +203,42 @@ export function ImportSection() {
 
       <FileUpload onFileAccepted={handleFileAccepted} onError={handleFileError} />
 
-      <div className="flex items-center gap-3">
-        <label htmlFor="reference-month" className="text-sm font-medium text-gray-700">
-          Mês da fatura:
-        </label>
-        <input
-          id="reference-month"
-          type="month"
-          value={referenceMonth}
-          onChange={(e) => setReferenceMonth(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex items-center gap-3">
+          <label htmlFor="reference-month" className="text-sm font-medium text-gray-700">
+            Mês da fatura:
+          </label>
+          <input
+            id="reference-month"
+            type="month"
+            value={referenceMonth}
+            onChange={(e) => setReferenceMonth(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {(accounts ?? []).length > 0 && (
+          <div className="flex items-center gap-3">
+            <label htmlFor="import-account" className="text-sm font-medium text-gray-700">
+              Cartão / conta:
+            </label>
+            <AccountSelect
+              id="import-account"
+              accounts={accounts ?? []}
+              value={accountId}
+              onChange={setAccountId}
+              preferCards
+              emptyLabel="Não vincular"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        )}
       </div>
+      {(accounts ?? []).length > 0 && accountId && (
+        <p className="-mt-2 text-xs text-gray-400">
+          Todas as transações importadas serão vinculadas a esta conta/cartão.
+        </p>
+      )}
 
       {fileError && (
         <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">

@@ -3,6 +3,7 @@ import { db } from '../db/index.js'
 import { recurringTransactions, transactions, categories } from '../db/schema.js'
 import type { RecurringTransaction } from '../db/schema.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
+import { assertAccountOwnership, assertDependentOwnership } from '../lib/ownership.js'
 
 export type { ServiceError }
 
@@ -50,6 +51,9 @@ export async function listRecurring(userId: string): Promise<RecurringTransactio
 export async function createRecurring(data: CreateRecurringData, userId: string): Promise<RecurringTransaction> {
   validate(data)
   if (!data.description?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'A descrição é obrigatória.')
+  await assertCategoryOwnership(data.categoryId, userId)
+  await assertAccountOwnership(data.accountId, userId)
+  await assertDependentOwnership(data.dependentId, userId)
 
   const [created] = await db
     .insert(recurringTransactions)
@@ -83,9 +87,18 @@ export async function updateRecurring(id: string, data: UpdateRecurringData, use
   if (data.description !== undefined) updates.description = data.description.trim()
   if (data.amount !== undefined) updates.amount = Math.abs(data.amount)
   if (data.kind !== undefined) updates.kind = data.kind === 'receita' ? 'receita' : 'despesa'
-  if (data.categoryId !== undefined) updates.categoryId = data.categoryId
-  if (data.accountId !== undefined) updates.accountId = data.accountId
-  if (data.dependentId !== undefined) updates.dependentId = data.dependentId
+  if (data.categoryId !== undefined) {
+    await assertCategoryOwnership(data.categoryId, userId)
+    updates.categoryId = data.categoryId
+  }
+  if (data.accountId !== undefined) {
+    await assertAccountOwnership(data.accountId, userId)
+    updates.accountId = data.accountId
+  }
+  if (data.dependentId !== undefined) {
+    await assertDependentOwnership(data.dependentId, userId)
+    updates.dependentId = data.dependentId
+  }
   if (data.paymentMethod !== undefined) updates.paymentMethod = data.paymentMethod
   if (data.dayOfMonth !== undefined) updates.dayOfMonth = data.dayOfMonth
   if (data.startMonth !== undefined) updates.startMonth = data.startMonth
@@ -110,8 +123,10 @@ export async function deleteRecurring(id: string, userId: string): Promise<void>
 
   // Desvincula as transações já geradas (mantém o histórico) e remove o modelo
   await db.transaction(async (tx) => {
-    await tx.update(transactions).set({ recurringId: null }).where(eq(transactions.recurringId, id))
-    await tx.delete(recurringTransactions).where(eq(recurringTransactions.id, id))
+    await tx.update(transactions).set({ recurringId: null })
+      .where(and(eq(transactions.recurringId, id), eq(transactions.userId, userId)))
+    await tx.delete(recurringTransactions)
+      .where(and(eq(recurringTransactions.id, id), eq(recurringTransactions.userId, userId)))
   })
 }
 

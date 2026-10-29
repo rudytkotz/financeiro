@@ -40,6 +40,7 @@ const postImportsSchema = {
       },
       referenceMonth: { type: 'string' },
       force: { type: 'boolean' },
+      accountId: { type: ['string', 'null'] },
     },
     additionalProperties: false,
   },
@@ -147,10 +148,17 @@ const importRoutes: FastifyPluginAsync = async (app) => {
       }>
       referenceMonth?: string
       force?: boolean
+      accountId?: string | null
     }
 
     // 1. Revalidar transações server-side
     const { valid, errors } = validateTransactions(body.transactions)
+
+    // Conta/cartão da fatura: aplicada a todas as transações desta importação
+    const importAccountId = body.accountId ?? null
+    if (importAccountId) {
+      for (const t of valid) t.accountId = importAccountId
+    }
 
     if (valid.length === 0) {
       return reply.status(422).send({
@@ -204,6 +212,7 @@ const importRoutes: FastifyPluginAsync = async (app) => {
               amount: t.amount,
               categoryId: t.categoryId,
               dependentId: t.dependentId,
+              accountId: t.accountId,
               portador: t.portador,
               installmentCurrent: i,
               installmentTotal: total,

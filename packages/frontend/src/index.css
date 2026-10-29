@@ -112,4 +112,38 @@
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
+
+  /* Oculta a scrollbar em carrosséis horizontais (pills, abas, resumos) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  /* Evita scroll horizontal acidental em telas pequenas */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Media/tabelas nunca estouram o container no mobile */
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+  }
+
+  /* Campos de formulário: fonte >= 16px no mobile evita zoom automático no iOS */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
 }

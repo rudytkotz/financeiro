@@ -6,7 +6,6 @@ import {
   Wallet,
   Target,
   LineChart,
-  Users,
   Shield,
   LogOut,
   Moon,
@@ -26,11 +25,10 @@ export default function Layout() {
 
   const navItems = [
     { to: '/', label: 'Painel', icon: LayoutDashboard },
-    { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
     { to: '/accounts', label: 'Contas', icon: Wallet },
-    { to: '/goals', label: 'Metas', icon: Target },
+    { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
     { to: '/investments', label: 'Investimentos', icon: LineChart },
-    { to: '/dependents', label: 'Dependentes', icon: Users },
+    { to: '/goals', label: 'Metas', icon: Target },
     ...(user?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
   ]
 

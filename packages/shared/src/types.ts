@@ -14,7 +14,8 @@ export interface Transaction {
   installmentCurrent: number | null
   installmentTotal: number | null
   accountId: string | null
-  kind: 'despesa' | 'receita'
+  transferId: string | null
+  kind: 'despesa' | 'receita' | 'transfer'
   recurringId: string | null
   createdAt: string
   updatedAt: string
@@ -146,6 +147,8 @@ export interface Account {
   closingDay: number | null    // dia de fechamento da fatura (cartão)
   dueDay: number | null        // dia de vencimento da fatura (cartão)
   creditLimit: number | null   // centavos (cartão)
+  parentAccountId: string | null // conta pai (cartão → conta corrente)
+  dependentId: string | null     // dependente dono da conta
   archived: boolean
   createdAt: string
   currentBalance: number       // centavos (calculado no backend)
@@ -159,6 +162,18 @@ export interface CreateAccountPayload {
   closingDay?: number | null
   dueDay?: number | null
   creditLimit?: number | null
+  parentAccountId?: string | null
+  dependentId?: string | null
+}
+
+// Resumo agregado por conta (saldo + investido + atividade)
+export interface AccountSummary {
+  accountId: string
+  currentBalance: number
+  investedCurrent: number
+  investmentCount: number
+  transactionCount: number
+  linkedCardCount: number
 }
 
 // Fatura de cartão de crédito
@@ -200,6 +215,7 @@ export interface Investment {
   maturityDate: string | null      // YYYY-MM-DD (renda fixa)
   rateType: string | null          // 'pos_cdi' | 'prefixado' | 'ipca_mais'
   rateValue: number | null         // % * 100 (ex: 110.00% = 11000)
+  accountId: string | null         // conta/corretora onde o ativo está (nullable)
   createdAt: string
   updatedAt: string
 }
@@ -400,6 +416,7 @@ export interface CreateInvestmentRvPayload {
   unitPrice?: number    // centavos
   fees?: number         // centavos
   date?: string         // YYYY-MM-DD
+  accountId?: string | null
 }
 
 export interface CreateInvestmentRfPayload {
@@ -410,6 +427,7 @@ export interface CreateInvestmentRfPayload {
   maturityDate?: string | null // YYYY-MM-DD
   rateType: RateType
   rateValue: number            // % * 100
+  accountId?: string | null
 }
 
 export interface CreateInvestmentTransactionPayload {

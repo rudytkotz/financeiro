@@ -12,6 +12,16 @@ export function useAccounts() {
   })
 }
 
+export function useAccountsSummary() {
+  return useQuery<import('@financeiro/shared').AccountSummary[]>({
+    queryKey: ['accounts', 'summary'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/accounts/summary')
+      return data
+    },
+  })
+}
+
 export function useInvoice(accountId: string | null, month: string) {
   return useQuery<import('@financeiro/shared').InvoiceSummary>({
     queryKey: ['invoice', accountId, month],
@@ -57,5 +67,27 @@ export function useDeleteAccount() {
       await api.delete(`/api/accounts/${id}`)
     },
     onSuccess: () => invalidate(qc),
+  })
+}
+
+export interface CreateTransferPayload {
+  fromAccountId: string
+  toAccountId: string
+  amount: number
+  date: string
+  description?: string
+}
+
+export function useCreateTransfer() {
+  const qc = useQueryClient()
+  return useMutation<unknown, Error, CreateTransferPayload>({
+    mutationFn: async (payload) => {
+      const { data } = await api.post('/api/transactions/transfer', payload)
+      return data
+    },
+    onSuccess: () => {
+      invalidate(qc)
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 }

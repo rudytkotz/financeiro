@@ -43,9 +43,9 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Metas</h1>
+          <h1 className="text-xl font-bold text-gray-900 md:text-2xl">Metas</h1>
           <p className="text-sm text-gray-500">Objetivos e reserva de emergência</p>
         </div>
         <button onClick={() => setShowForm((s) => !s)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-md transition hover:bg-primary/90 active:scale-95">

@@ -130,7 +130,7 @@ export function useCreateRfInvestment() {
 
 export function useUpdateRvInvestment() {
   const qc = useQueryClient()
-  return useMutation<Investment, Error, { id: string; payload: { ticker?: string; name?: string; assetClass?: string } }>({
+  return useMutation<Investment, Error, { id: string; payload: { ticker?: string; name?: string; assetClass?: string; accountId?: string | null } }>({
     mutationFn: async ({ id, payload }) => {
       const { data } = await api.put(`/api/investments/rv/${id}`, payload)
       return data

@@ -50,7 +50,7 @@ export async function getBudgets(month: string, userId: string): Promise<BudgetS
     })
     .from(transactions)
     .where(sql`${transactions.referenceMonth} = ${month}
-      AND (${transactions.userId} = ${userId} OR ${transactions.userId} IS NULL)
+      AND ${transactions.userId} = ${userId}
       AND ${transactions.kind} = 'despesa'`)
     .groupBy(transactions.categoryId)
 

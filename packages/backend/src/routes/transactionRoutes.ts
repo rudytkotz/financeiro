@@ -6,6 +6,8 @@ import {
   deleteTransaction,
   deleteAllByMonth,
   associateDependent,
+  createTransfer,
+  deleteTransfer,
 } from '../services/transactionService.js'
 import { getUserId } from '../lib/auth.js'
 import { parse } from '../lib/validation.js'
@@ -16,6 +18,7 @@ import {
   listTransactionsQuerySchema,
   monthQuerySchema,
   idParamSchema,
+  createTransferSchema,
 } from '../lib/schemas.js'
 
 const transactionRoutes: FastifyPluginAsync = async (app) => {
@@ -29,6 +32,20 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
     const body = parse(createTransactionSchema, request.body)
     const transaction = await createTransaction(body, getUserId(request))
     return reply.status(201).send(transaction)
+  })
+
+  // Transferência entre contas (cria o par de lançamentos)
+  app.post('/api/transactions/transfer', async (request, reply) => {
+    const body = parse(createTransferSchema, request.body)
+    const result = await createTransfer(body, getUserId(request))
+    return reply.status(201).send(result)
+  })
+
+  // Remove uma transferência pelas duas pontas
+  app.delete('/api/transactions/transfer/:id', async (request, reply) => {
+    const { id } = parse(idParamSchema, request.params)
+    await deleteTransfer(id, getUserId(request))
+    return reply.status(204).send()
   })
 
   app.put('/api/transactions/:id', async (request, reply) => {

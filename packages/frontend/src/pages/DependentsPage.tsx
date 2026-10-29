@@ -14,6 +14,10 @@ interface ApiErrorResponse {
 }
 
 export default function DependentsPage() {
+  return <DependentsSection />
+}
+
+export function DependentsSection() {
   const { data: dependents = [], isLoading } = useDependents()
   const createMutation = useCreateDependent()
   const queryClient = useQueryClient()

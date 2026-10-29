@@ -7,6 +7,7 @@ import { useCategories } from '@/hooks/useCategories'
 import { usePortfolioSummary } from '@/hooks/useInvestments'
 import { useFinancialHealth } from '@/hooks/useFinancialHealth'
 import { useAlerts } from '@/hooks/useAlerts'
+import { useIsNarrow } from '@/hooks/useMediaQuery'
 import { useSetIncome } from '@/hooks/useMutations'
 import { CreditCard, Smartphone, Wallet, Banknote, TrendingDown, TrendingUp, DollarSign, SlidersHorizontal, LineChart, PiggyBank, ArrowRight, Activity, Bell } from 'lucide-react'
 import type { PortfolioSummary, FinancialHealth, Alert } from '@financeiro/shared'
@@ -46,6 +47,7 @@ function formatMonthLabel(month: string): string {
 }
 
 export default function DashboardPage() {
+  const isNarrow = useIsNarrow()
   const [month, setMonth] = useState(getCurrentMonth)
   const [catDependentId, setCatDependentId] = useState('')
   const [catPaymentMethod, setCatPaymentMethod] = useState('')
@@ -79,9 +81,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Painel Financeiro</h1>
+          <h1 className="text-xl font-bold text-gray-900 md:text-2xl">Painel Financeiro</h1>
           <p className="text-sm text-gray-500">{formatMonthLabel(month)}</p>
         </div>
         <input
@@ -255,9 +257,11 @@ export default function DashboardPage() {
                       nameKey="categoryName"
                       cx="50%"
                       cy="50%"
-                      outerRadius={90}
-                      label={({ categoryName, percentage }) =>
-                        `${categoryName} (${(percentage ?? 0).toFixed(1)}%)`
+                      outerRadius="75%"
+                      label={isNarrow
+                        ? ({ percentage }) => `${(percentage ?? 0).toFixed(0)}%`
+                        : ({ categoryName, percentage }) =>
+                            `${categoryName} (${(percentage ?? 0).toFixed(1)}%)`
                       }
                     >
                       {(dashboard.expensesByCategory ?? []).map((entry, index) => (

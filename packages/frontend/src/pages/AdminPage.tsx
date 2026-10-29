@@ -284,7 +284,7 @@ function TxDrawer({ user, onClose }: { user: AdminUser; onClose: () => void }) {
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-auto flex-1">
           {isLoading ? (
             <div className="flex justify-center py-12">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />

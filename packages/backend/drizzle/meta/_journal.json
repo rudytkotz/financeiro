@@ -134,6 +134,41 @@
       "when": 1725800000000,
       "tag": "0018_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1725900000000,
+      "tag": "0019_account_parent",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1726000000000,
+      "tag": "0020_investment_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1726100000000,
+      "tag": "0021_account_dependent",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1726200000000,
+      "tag": "0022_transfers",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1726300000000,
+      "tag": "0023_claim_orphan_rows",
+      "breakpoints": true
     }
   ]
 }

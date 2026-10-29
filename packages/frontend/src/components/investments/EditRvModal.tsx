@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useUpdateRvInvestment } from '@/hooks/useInvestments'
+import { useAccounts } from '@/hooks/useAccounts'
+import AccountSelect from '@/components/AccountSelect'
 import type { RvAssetClass, Investment } from '@financeiro/shared'
 import { X } from 'lucide-react'
 
@@ -12,9 +14,11 @@ const ASSET_CLASSES: Array<{ value: RvAssetClass; label: string }> = [
 
 export default function EditRvModal({ investment, onClose }: { investment: Investment | null; onClose: () => void }) {
   const updateMutation = useUpdateRvInvestment()
+  const { data: accounts } = useAccounts()
   const [ticker, setTicker] = useState('')
   const [name, setName] = useState('')
   const [assetClass, setAssetClass] = useState<RvAssetClass>('acao')
+  const [accountId, setAccountId] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -22,6 +26,7 @@ export default function EditRvModal({ investment, onClose }: { investment: Inves
       setTicker(investment.ticker ?? '')
       setName(investment.name)
       setAssetClass((investment.assetClass as RvAssetClass) ?? 'acao')
+      setAccountId(investment.accountId ?? '')
       setError('')
     }
   }, [investment])
@@ -36,7 +41,7 @@ export default function EditRvModal({ investment, onClose }: { investment: Inves
     try {
       await updateMutation.mutateAsync({
         id: investment!.id,
-        payload: { ticker: ticker.trim().toUpperCase(), name: name.trim(), assetClass },
+        payload: { ticker: ticker.trim().toUpperCase(), name: name.trim(), assetClass, accountId: accountId || null },
       })
       onClose()
     } catch {
@@ -78,6 +83,18 @@ export default function EditRvModal({ investment, onClose }: { investment: Inves
               ))}
             </div>
           </div>
+          {(accounts ?? []).length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">Conta / corretora <span className="text-[10px] font-normal text-gray-400">(opcional)</span></label>
+              <AccountSelect
+                accounts={accounts ?? []}
+                value={accountId}
+                onChange={setAccountId}
+                emptyLabel="Não vincular"
+                className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              />
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50">Cancelar</button>
             <button type="submit" disabled={updateMutation.isPending} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50">

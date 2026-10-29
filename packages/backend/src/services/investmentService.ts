@@ -5,6 +5,7 @@ import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes, getGenericQuotes } from './quoteService.js'
 import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m, getIbovMonthlySeries } from './rateService.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
+import { assertAccountOwnership } from '../lib/ownership.js'
 
 export type { ServiceError }
 
@@ -98,12 +99,14 @@ export interface CreateRvData {
   unitPrice?: number
   fees?: number
   date?: string
+  accountId?: string | null
 }
 
 export async function createRvInvestment(data: CreateRvData, userId: string): Promise<Investment> {
   const ticker = data.ticker?.trim().toUpperCase() ?? ''
   if (!ticker) throw makeError(422, 'VALIDATION_ERROR', 'O ticker é obrigatório.')
   if (!data.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome é obrigatório.')
+  await assertAccountOwnership(data.accountId, userId)
 
   const [created] = await db
     .insert(investments)
@@ -112,6 +115,7 @@ export async function createRvInvestment(data: CreateRvData, userId: string): Pr
       ticker,
       name: data.name.trim(),
       assetClass: data.assetClass ?? 'acao',
+      accountId: data.accountId ?? null,
       userId,
     })
     .returning()
@@ -140,6 +144,7 @@ export interface CreateRfData {
   maturityDate?: string | null
   rateType: string
   rateValue: number
+  accountId?: string | null
 }
 
 export async function createRfInvestment(data: CreateRfData, userId: string): Promise<Investment> {
@@ -147,6 +152,7 @@ export async function createRfInvestment(data: CreateRfData, userId: string): Pr
   if (!data.investedAmount || data.investedAmount <= 0) throw makeError(422, 'VALIDATION_ERROR', 'O valor aplicado deve ser maior que zero.')
   if (!data.applicationDate) throw makeError(422, 'VALIDATION_ERROR', 'A data de aplicação é obrigatória.')
   if (!data.rateType) throw makeError(422, 'VALIDATION_ERROR', 'O tipo de rentabilidade é obrigatório.')
+  await assertAccountOwnership(data.accountId, userId)
 
   const [created] = await db
     .insert(investments)
@@ -159,6 +165,7 @@ export async function createRfInvestment(data: CreateRfData, userId: string): Pr
       maturityDate: data.maturityDate ?? null,
       rateType: data.rateType,
       rateValue: data.rateValue,
+      accountId: data.accountId ?? null,
       userId,
     })
     .returning()
@@ -187,6 +194,7 @@ export interface UpdateRvData {
   ticker?: string
   name?: string
   assetClass?: string
+  accountId?: string | null
 }
 
 export async function updateRvInvestment(id: string, data: UpdateRvData, userId: string): Promise<Investment> {
@@ -209,6 +217,10 @@ export async function updateRvInvestment(id: string, data: UpdateRvData, userId:
     updates.name = data.name.trim()
   }
   if (data.assetClass !== undefined) updates.assetClass = data.assetClass
+  if (data.accountId !== undefined) {
+    await assertAccountOwnership(data.accountId, userId)
+    updates.accountId = data.accountId
+  }
 
   const [updated] = await db
     .update(investments)
@@ -226,6 +238,7 @@ export interface UpdateRfData {
   maturityDate?: string | null
   rateType?: string
   rateValue?: number
+  accountId?: string | null
 }
 
 export async function updateRfInvestment(id: string, data: UpdateRfData, userId: string): Promise<Investment> {
@@ -254,6 +267,10 @@ export async function updateRfInvestment(id: string, data: UpdateRfData, userId:
   if (data.maturityDate !== undefined) updates.maturityDate = data.maturityDate || null
   if (data.rateType !== undefined) updates.rateType = data.rateType
   if (data.rateValue !== undefined) updates.rateValue = data.rateValue
+  if (data.accountId !== undefined) {
+    await assertAccountOwnership(data.accountId, userId)
+    updates.accountId = data.accountId
+  }
 
   const [updated] = await db
     .update(investments)

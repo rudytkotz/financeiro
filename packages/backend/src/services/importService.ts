@@ -16,6 +16,7 @@ export interface ImportTransaction {
   amount: number // centavos, positivo
   categoryId: string
   dependentId?: string | null
+  accountId?: string | null
   portador?: string | null
   installmentCurrent?: number | null
   installmentTotal?: number | null
@@ -147,6 +148,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         amount: t.amount,
         categoryId: null, // categoria definida pelo usuario
         dependentId: t.dependentId ?? null,
+        accountId: t.accountId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
         installmentTotal: t.installmentTotal ?? null,
@@ -260,7 +262,7 @@ export async function overwriteImport(
                 sql`${transactions.importId} IS NULL`,
                 eq(transactions.description, description),
                 eq(transactions.installmentTotal, installmentTotal),
-                userId ? eq(transactions.userId, userId) : sql`${transactions.userId} IS NULL`
+                userId ? eq(transactions.userId, userId) : sql`1=0`
               )
             )
         }
@@ -289,6 +291,7 @@ export async function overwriteImport(
         amount: t.amount,
         categoryId: null as string | null,
         dependentId: t.dependentId ?? null,
+        accountId: t.accountId ?? null,
         portador: t.portador ?? null,
         installmentCurrent: t.installmentCurrent ?? null,
         installmentTotal: t.installmentTotal ?? null,
@@ -366,6 +369,7 @@ export async function insertStandaloneTransactions(transactionList: ImportTransa
       amount: t.amount,
       categoryId: null, // categoria definida pelo usuario
       dependentId: t.dependentId ?? null,
+      accountId: t.accountId ?? null,
       portador: t.portador ?? null,
       installmentCurrent: t.installmentCurrent ?? null,
       installmentTotal: t.installmentTotal ?? null,
@@ -398,7 +402,7 @@ export async function filterDuplicateInstallments(transactionList: ImportTransac
 
   const userCondition = userId
     ? sql`${transactions.userId} = ${userId}`
-    : sql`${transactions.userId} IS NULL`
+    : sql`1=0`
 
   const existingRows = await db
     .select({

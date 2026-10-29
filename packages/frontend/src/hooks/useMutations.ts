@@ -169,6 +169,7 @@ export interface ImportCsvPayload {
   }>
   referenceMonth: string
   force?: boolean
+  accountId?: string | null
 }
 
 export function useImportCsv() {
@@ -181,6 +182,7 @@ export function useImportCsv() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
     },
   })
 }

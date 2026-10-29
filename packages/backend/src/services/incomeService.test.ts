@@ -64,10 +64,8 @@ describe('incomeService', () => {
 
     it('should accept amount = 1 (minimum valid)', async () => {
       const mockRecord = { id: '1', month: '2024-01', amount: 1, userId: TEST_USER }
-      // setIncome: 1) busca existing (vazio), 2) busca legacy (vazio), 3) insere
-      ;(db.select as any)
-        .mockReturnValueOnce(mockSelectChain([]))
-        .mockReturnValueOnce(mockSelectChain([]))
+      // setIncome: 1) busca existing (vazio), 2) insere
+      ;(db.select as any).mockReturnValueOnce(mockSelectChain([]))
       const returning = vi.fn().mockResolvedValue([mockRecord])
       ;(db.insert as any).mockReturnValue({ values: vi.fn().mockReturnValue({ returning }) })
 
@@ -77,9 +75,7 @@ describe('incomeService', () => {
 
     it('should accept amount = 99999999999 (maximum valid)', async () => {
       const mockRecord = { id: '1', month: '2024-01', amount: 99_999_999_999, userId: TEST_USER }
-      ;(db.select as any)
-        .mockReturnValueOnce(mockSelectChain([]))
-        .mockReturnValueOnce(mockSelectChain([]))
+      ;(db.select as any).mockReturnValueOnce(mockSelectChain([]))
       const returning = vi.fn().mockResolvedValue([mockRecord])
       ;(db.insert as any).mockReturnValue({ values: vi.fn().mockReturnValue({ returning }) })
 
@@ -90,10 +86,8 @@ describe('incomeService', () => {
 
   describe('getIncome', () => {
     it('should return null when no record found', async () => {
-      // getIncome: busca user-specific (vazio) e depois legacy (vazio)
-      ;(db.select as any)
-        .mockReturnValueOnce(mockSelectChain([]))
-        .mockReturnValueOnce(mockSelectChain([]))
+      // getIncome agora faz uma única busca, estritamente pelo usuário
+      ;(db.select as any).mockReturnValueOnce(mockSelectChain([]))
 
       const result = await getIncome('2024-01', TEST_USER)
       expect(result).toBeNull()

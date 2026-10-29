@@ -102,6 +102,8 @@ export const transactions = pgTable(
     installmentTotal: integer('installment_total'), // total de parcelas (nullable)
     referenceMonth: varchar('reference_month', { length: 7 }), // YYYY-MM — mês em que a transação deve aparecer
     accountId: uuid('account_id').references(() => accounts.id), // conta/carteira (nullable)
+    // Par de transferência entre contas: as duas pontas compartilham o mesmo id
+    transferId: uuid('transfer_id'),
     // Vínculo com o modelo recorrente que gerou esta transação (nullable)
     recurringId: uuid('recurring_id'),
     userId: uuid('user_id').references(() => users.id),
@@ -119,6 +121,8 @@ export const transactions = pgTable(
     dependentIdx: index('transactions_dependent_id_idx').on(table.dependentId),
     // Index on import_id for import-based queries
     importIdx: index('transactions_import_id_idx').on(table.importId),
+    // Index on transfer_id to fetch both legs of a transfer
+    transferIdx: index('transactions_transfer_id_idx').on(table.transferId),
   })
 )
 
@@ -149,12 +153,19 @@ export const accounts = pgTable(
     closingDay: integer('closing_day'),     // 1-31 (apenas cartão)
     dueDay: integer('due_day'),              // 1-31 (apenas cartão)
     creditLimit: bigint('credit_limit', { mode: 'number' }), // centavos (apenas cartão)
+    // Conta "pai": usado para vincular um cartão de crédito à conta corrente
+    // dona dele (ex: cartão Nubank → conta Nubank). Nullable e auto-referente.
+    parentAccountId: uuid('parent_account_id'),
+    // Dependente dono da conta (ex: conta do filho). Nullable.
+    dependentId: uuid('dependent_id'),
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     userId: uuid('user_id').notNull().references(() => users.id),
   },
   (table) => ({
     userIdx: index('accounts_user_id_idx').on(table.userId),
+    parentIdx: index('accounts_parent_id_idx').on(table.parentAccountId),
+    dependentIdx: index('accounts_dependent_id_idx').on(table.dependentId),
   })
 )
 
@@ -188,6 +199,9 @@ export const investments = pgTable(
     // Armazenada como basis points * 100 (ex: 110.00% = 11000) para precisão
     rateValue: integer('rate_value'),
 
+    // Conta/corretora onde o ativo está custodiado (nullable)
+    accountId: uuid('account_id'),
+
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
     userId: uuid('user_id').notNull().references(() => users.id),
@@ -195,6 +209,7 @@ export const investments = pgTable(
   (table) => ({
     userIdx: index('investments_user_id_idx').on(table.userId),
     tickerIdx: index('investments_ticker_idx').on(table.ticker),
+    accountIdx: index('investments_account_id_idx').on(table.accountId),
   })
 )
 
