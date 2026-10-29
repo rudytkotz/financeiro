@@ -396,11 +396,15 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
       : eq(transactions.id, id))
     .returning()
 
-  // Propagar categoryId e dependentId para todas as parcelas da mesma compra
+  // Propagar categoryId, dependentId, conta (accountId) e forma de pagamento
+  // para todas as parcelas da mesma compra. O vínculo com o cartão/conta e a
+  // forma de pagamento valem para a compra inteira, não apenas uma parcela.
   if (existing.installmentTotal && existing.installmentTotal > 1) {
     const propagateUpdates: Record<string, unknown> = {}
     if (data.categoryId !== undefined) propagateUpdates.categoryId = data.categoryId
     if (data.dependentId !== undefined) propagateUpdates.dependentId = data.dependentId
+    if (data.accountId !== undefined) propagateUpdates.accountId = data.accountId
+    if (data.paymentMethod !== undefined) propagateUpdates.paymentMethod = data.paymentMethod
 
     if (Object.keys(propagateUpdates).length > 0) {
       propagateUpdates.updatedAt = new Date()

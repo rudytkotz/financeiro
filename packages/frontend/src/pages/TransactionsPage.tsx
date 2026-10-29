@@ -13,7 +13,7 @@ import {
 import TransactionModal from '@/components/TransactionModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DependentSelector from '@/components/DependentSelector'
-import type { Transaction, Category, Dependent } from '@financeiro/shared'
+import type { Transaction, Category, Dependent, Account } from '@financeiro/shared'
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Trash2,
   CreditCard, Smartphone, Wallet, Banknote,
@@ -261,6 +261,7 @@ function TransactionsSection() {
   const saveDesc = useCallback(async (id: string, v: string, o: string) => { const x = v.trim(); if (!x || x === o) return; await updateMutation.mutateAsync({ id, payload: { description: x } }) }, [updateMutation])
   const saveCat = useCallback(async (id: string, v: string, o: string) => { if (v === o) return; await updateMutation.mutateAsync({ id, payload: { categoryId: v || null } as any }) }, [updateMutation])
   const savePm = useCallback(async (id: string, v: string) => { await updateMutation.mutateAsync({ id, payload: { paymentMethod: v } as any }) }, [updateMutation])
+  const saveAcc = useCallback(async (id: string, v: string, o: string) => { if (v === (o || '')) return; await updateMutation.mutateAsync({ id, payload: { accountId: v || null } as any }) }, [updateMutation])
   const saveAmt = useCallback(async (id: string, display: string, orig: number) => {
     const n = Number(display.replace(/\s/g, '').replace('R$', '').replace(/\./g, '').replace(',', '.'))
     if (isNaN(n) || n === 0) return; const c = Math.round(n * 100); if (c === orig) return
@@ -534,13 +535,14 @@ function TransactionsSection() {
                   <th className="px-4 py-3 text-left"><SortBtn field="category">Categoria</SortBtn></th>
                   <th className="px-4 py-3 text-left"><SortBtn field="dependent">Dependente</SortBtn></th>
                   <th className="px-4 py-3 text-center"><SortBtn field="paymentMethod">Tipo</SortBtn></th>
+                  <th className="px-4 py-3 text-left"><span className="font-semibold text-[11px] uppercase tracking-wider text-gray-400">Conta/Cartão</span></th>
                   <th className="w-10"></th>
                 </tr>
               </thead>
               <tbody>
                 {transactions.map((t, i) => (
-                  <DeskRow key={t.id} t={t} odd={i % 2 === 1} cats={categories ?? []} deps={dependents ?? []}
-                    onDesc={saveDesc} onCat={saveCat} onAmt={saveAmt} onPm={savePm} onDel={handleOpenDelete} />
+                  <DeskRow key={t.id} t={t} odd={i % 2 === 1} cats={categories ?? []} deps={dependents ?? []} accs={accounts ?? []}
+                    onDesc={saveDesc} onCat={saveCat} onAmt={saveAmt} onPm={savePm} onAcc={saveAcc} onDel={handleOpenDelete} />
                 ))}
               </tbody>
             </table>
@@ -549,8 +551,8 @@ function TransactionsSection() {
           {/* MOBILE CARDS */}
           <div className="space-y-2.5 md:hidden">
             {transactions.map((t) => (
-              <MobCard key={t.id} t={t} cats={categories ?? []} deps={dependents ?? []}
-                onDesc={saveDesc} onCat={saveCat} onAmt={saveAmt} onPm={savePm} onDel={handleOpenDelete} />
+              <MobCard key={t.id} t={t} cats={categories ?? []} deps={dependents ?? []} accs={accounts ?? []}
+                onDesc={saveDesc} onCat={saveCat} onAmt={saveAmt} onPm={savePm} onAcc={saveAcc} onDel={handleOpenDelete} />
             ))}
           </div>
         </>
@@ -623,18 +625,21 @@ export default function TransactionsPage() {
 // ===========================================================================
 interface RP {
   t: Transaction; odd: boolean
-  cats: Category[]; deps: Dependent[]
+  cats: Category[]; deps: Dependent[]; accs: Account[]
   onDesc: (id: string, v: string, o: string) => void
   onCat: (id: string, v: string, o: string) => void
   onAmt: (id: string, d: string, o: number) => void
   onPm: (id: string, v: string) => void
+  onAcc: (id: string, v: string, o: string) => void
   onDel: (t: Transaction) => void
 }
 
-function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) {
+function DeskRow({ t, odd, cats, deps, accs, onDesc, onCat, onAmt, onPm, onAcc, onDel }: RP) {
   const [desc, setDesc] = useState(t.description)
   const [amt, setAmt] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pm = getPm((t as any).paymentMethod || 'credito')
+  const cardAccs = accs.filter((a) => a.type === 'cartao')
+  const otherAccs = accs.filter((a) => a.type !== 'cartao')
 
   // Ressincroniza o estado local quando o valor vindo do servidor muda
   // (ex.: após refetch/reordenação da lista). Sem isto, a linha pode exibir
@@ -700,6 +705,22 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
           {PAYMENT_METHODS.map((p) => <option key={p.value} value={p.value}>{p.shortLabel}</option>)}
         </select>
       </td>
+      <td className="px-4 py-3">
+        <select value={t.accountId ?? ''} onChange={(e) => onAcc(t.id, e.target.value, t.accountId ?? '')}
+          className="w-full max-w-[150px] rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs text-gray-600 transition hover:border-gray-200 hover:bg-white focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/10">
+          <option value="">Nenhuma</option>
+          {cardAccs.length > 0 && (
+            <optgroup label="Cartões de crédito">
+              {cardAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </optgroup>
+          )}
+          {otherAccs.length > 0 && (
+            <optgroup label="Contas e carteiras">
+              {otherAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </optgroup>
+          )}
+        </select>
+      </td>
       <td className="px-2 py-3">
         <button onClick={() => onDel(t)} className="rounded-lg p-1.5 text-gray-200 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all">
           <Trash2 className="h-3.5 w-3.5" />
@@ -714,11 +735,13 @@ function DeskRow({ t, odd, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: RP) 
 // ===========================================================================
 type MP = Omit<RP, 'odd'>
 
-function MobCard({ t, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: MP) {
+function MobCard({ t, cats, deps, accs, onDesc, onCat, onAmt, onPm, onAcc, onDel }: MP) {
   const [desc, setDesc] = useState(t.description)
   const [amt, setAmt] = useState(() => (t.amount / 100).toFixed(2).replace('.', ','))
   const pm = getPm((t as any).paymentMethod || 'credito')
   const Icon = pm.icon
+  const cardAccs = accs.filter((a) => a.type === 'cartao')
+  const otherAccs = accs.filter((a) => a.type !== 'cartao')
 
   // Ressincroniza o estado local quando o valor vindo do servidor muda
   // (ex.: após refetch/reordenação da lista).
@@ -785,6 +808,20 @@ function MobCard({ t, cats, deps, onDesc, onCat, onAmt, onPm, onDel }: MP) {
         <select value={(t as any).paymentMethod || 'credito'} onChange={(e) => onPm(t.id, e.target.value)}
           className={`flex-shrink-0 rounded-lg border ${pm.border} ${pm.bg} px-2 py-1.5 text-[11px] font-bold ${pm.color} focus:outline-none focus:ring-1 focus:ring-primary`}>
           {PAYMENT_METHODS.map((p) => <option key={p.value} value={p.value}>{p.shortLabel}</option>)}
+        </select>
+        <select value={t.accountId ?? ''} onChange={(e) => onAcc(t.id, e.target.value, t.accountId ?? '')}
+          className="flex-shrink-0 rounded-lg border border-gray-100 bg-gray-50 px-2 py-1.5 text-[11px] font-medium text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="">Sem conta</option>
+          {cardAccs.length > 0 && (
+            <optgroup label="Cartões de crédito">
+              {cardAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </optgroup>
+          )}
+          {otherAccs.length > 0 && (
+            <optgroup label="Contas e carteiras">
+              {otherAccs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </optgroup>
+          )}
         </select>
         <div className="flex-1 min-w-0">
           <DependentSelector transactionId={t.id} currentDependentId={t.dependentId} dependents={deps} />
