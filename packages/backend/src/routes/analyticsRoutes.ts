@@ -7,6 +7,7 @@ import {
   searchTransactions,
 } from '../services/analyticsService.js'
 import { simulateCompound } from '../services/simulatorService.js'
+import { recordSnapshot } from '../services/investmentAdvancedService.js'
 import { getUserId } from '../lib/auth.js'
 import type { CompoundSimInput } from '@financeiro/shared'
 
@@ -30,7 +31,11 @@ const analyticsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/analytics/networth', async (request, reply) => {
     const { months } = request.query as { months?: string }
     const n = months ? Math.min(Math.max(parseInt(months, 10) || 12, 3), 36) : 12
-    return reply.send(await getNetWorthEvolution(getUserId(request), n))
+    const userId = getUserId(request)
+    // Captura a foto real do patrimônio deste mês (idempotente) para que a
+    // evolução fique fiel mesmo sem abrir a tela de Investimentos.
+    try { await recordSnapshot(userId) } catch { /* não bloqueia o relatório */ }
+    return reply.send(await getNetWorthEvolution(userId, n))
   })
 
   // Retrospectiva anual

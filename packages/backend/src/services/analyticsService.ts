@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, ne, isNull, inArray, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { transactions, categories, income, recurringTransactions } from '../db/schema.js'
+import { transactions, categories, income, recurringTransactions, portfolioSnapshots } from '../db/schema.js'
 import type {
   MonthComparison, MonthComparisonCategory,
   CashFlowForecast, CashFlowItem,
@@ -209,11 +209,33 @@ export async function getNetWorthEvolution(userId: string, months = 12): Promise
       .map((m) => [m.month, Number(m.total)]),
   )
 
-  // Investido atual (não temos histórico mensal real de mercado — usamos o valor atual
-  // como aproximação para o mês corrente e zero retroativo seria enganoso; então
-  // mantemos o investido constante = atual nos meses exibidos).
+  // Investido: usamos os snapshots mensais REAIS do patrimônio (portfolio_snapshots)
+  // quando existem para o mês. Para meses sem snapshot (ex: antes de começar a usar
+  // o app), caímos numa aproximação com o valor atual, marcando como estimado.
+  const snaps = await db
+    .select({ month: portfolioSnapshots.month, totalCurrent: portfolioSnapshots.totalCurrent })
+    .from(portfolioSnapshots)
+    .where(eq(portfolioSnapshots.userId, userId))
+    .orderBy(portfolioSnapshots.month)
+
+  const snapByMonth = new Map(snaps.map((s) => [s.month, s.totalCurrent]))
   const invested = await getInvestedByAccount(userId)
-  const investedTotal = [...invested.values()].reduce((s, v) => s + v.value, 0)
+  const currentInvested = [...invested.values()].reduce((s, v) => s + v.value, 0)
+
+  // Preenche lacunas: se um mês não tem snapshot, usa o snapshot anterior mais
+  // próximo (carry-forward); se nem isso, usa o investido atual. Marca estimado.
+  function investedForMonth(ym: string): { value: number; estimated: boolean } {
+    const exact = snapByMonth.get(ym)
+    if (exact !== undefined) return { value: exact, estimated: false }
+    // último snapshot com mês <= ym
+    let carried: number | null = null
+    for (const s of snaps) {
+      if (s.month <= ym) carried = s.totalCurrent
+      else break
+    }
+    if (carried !== null) return { value: carried, estimated: true }
+    return { value: currentInvested, estimated: true }
+  }
 
   const points: NetWorthPoint[] = []
   for (let i = months - 1; i >= 0; i--) {
@@ -223,11 +245,13 @@ export async function getNetWorthEvolution(userId: string, months = 12): Promise
     for (const [mm, total] of movByMonth) {
       if (mm && mm <= ym) acc -= total // amount positivo = despesa (reduz)
     }
+    const inv = investedForMonth(ym)
     points.push({
       month: ym,
       accounts: acc,
-      investments: investedTotal,
-      total: acc + investedTotal,
+      investments: inv.value,
+      total: acc + inv.value,
+      investmentsEstimated: inv.estimated,
     })
   }
   return points

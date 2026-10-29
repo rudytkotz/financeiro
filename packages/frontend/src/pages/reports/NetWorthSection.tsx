@@ -21,6 +21,8 @@ export default function NetWorthSection() {
   }))
 
   const last = data && data.length ? data[data.length - 1] : null
+  const estimatedCount = (data ?? []).filter((p) => p.investmentsEstimated).length
+  const realCount = (data ?? []).length - estimatedCount
 
   return (
     <div className="space-y-4">
@@ -71,7 +73,10 @@ export default function NetWorthSection() {
           </ResponsiveContainer>
         )}
         <p className="mt-2 text-[10px] text-gray-400">
-          O saldo de contas é reconstruído mês a mês pelas movimentações. O investido usa o valor atual de mercado como referência.
+          O saldo de contas é reconstruído mês a mês pelas movimentações.
+          {realCount > 0 && ` Investimentos: ${realCount} mês(es) com valor real registrado`}
+          {estimatedCount > 0 && `${realCount > 0 ? ' e ' : ' Investimentos: '}${estimatedCount} estimado(s) (meses sem histórico, usam o valor mais recente)`}.
+          {' '}O histórico real é capturado automaticamente a cada mês de uso.
         </p>
       </div>
     </div>

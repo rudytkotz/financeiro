@@ -623,6 +623,7 @@ export interface NetWorthPoint {
   accounts: number       // saldo em contas (centavos)
   investments: number    // valor investido (centavos)
   total: number
+  investmentsEstimated: boolean // true = sem snapshot real (aproximação)
 }
 
 // Retrospectiva anual
