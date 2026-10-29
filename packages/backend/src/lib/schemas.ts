@@ -15,6 +15,10 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Cor inválida. Use forma
 // Transações
 // ---------------------------------------------------------------------------
 
+const tags = z.string().trim().max(255).nullable().optional()
+const attachmentUrl = z.string().max(2_000_000).nullable().optional()
+const attachmentName = z.string().trim().max(255).nullable().optional()
+
 export const createTransactionSchema = z.object({
   date: dateISO,
   description: z.string().trim().min(1, 'A descrição é obrigatória.').max(255),
@@ -26,6 +30,9 @@ export const createTransactionSchema = z.object({
   kind: z.enum(['despesa', 'receita']).optional(),
   installmentTotal: z.number().int().min(1).max(24).optional(),
   paymentMethod: paymentMethod.optional(),
+  tags,
+  attachmentUrl,
+  attachmentName,
 })
 
 export const updateTransactionSchema = z.object({
@@ -37,6 +44,9 @@ export const updateTransactionSchema = z.object({
   accountId: uuid.nullable().optional(),
   paymentMethod: paymentMethod.optional(),
   operationType: operationType.optional(),
+  tags,
+  attachmentUrl,
+  attachmentName,
 })
 
 export const associateDependentSchema = z.object({
@@ -129,6 +139,7 @@ export const createDependentSchema = z.object({
 
 export const setIncomeSchema = z.object({
   amount: z.number().int().min(1).max(99_999_999_999),
+  accountId: uuid.nullable().optional(),
 })
 
 // ---------------------------------------------------------------------------
@@ -171,6 +182,7 @@ export const createGoalSchema = z.object({
   targetAmount: z.number().int().positive('O valor alvo deve ser maior que zero.'),
   targetDate: dateISO.nullable().optional(),
   color: hexColor.nullable().optional(),
+  accountId: uuid.nullable().optional(),
 })
 
 export const updateGoalSchema = createGoalSchema.partial().extend({

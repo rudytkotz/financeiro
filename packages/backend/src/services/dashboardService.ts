@@ -92,8 +92,9 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
 
   const monthCond = monthCondition(month)
   const userCond = userId ? sql`${transactions.userId} = ${userId}` : sql`1=1`
-  // Condição base para DESPESAS (exclui receitas)
-  const fullCond = sql`${monthCond} AND ${userCond} AND ${transactions.kind} = 'despesa'`
+  const notDeleted = sql`${transactions.deletedAt} IS NULL`
+  // Condição base para DESPESAS (exclui receitas e itens na lixeira)
+  const fullCond = sql`${monthCond} AND ${userCond} AND ${notDeleted} AND ${transactions.kind} = 'despesa'`
 
   // 1. Total geral de gastos (apenas despesas do mês)
   const [totalResult] = await db
@@ -121,7 +122,7 @@ export async function getDashboard(month: string, userId?: string, filters: Dash
       total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(sql`${monthCond} AND ${userCond} AND ${transactions.kind} = 'receita'`)
+    .where(sql`${monthCond} AND ${userCond} AND ${notDeleted} AND ${transactions.kind} = 'receita'`)
 
   const transactionIncome = Number(incomeTxResult.total)
 

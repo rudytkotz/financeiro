@@ -7,6 +7,7 @@ import {
   bigint,
   integer,
   timestamp,
+  text,
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core'
@@ -104,6 +105,13 @@ export const transactions = pgTable(
     accountId: uuid('account_id').references(() => accounts.id), // conta/carteira (nullable)
     // Par de transferência entre contas: as duas pontas compartilham o mesmo id
     transferId: uuid('transfer_id'),
+    // Soft delete (lixeira): quando preenchido, a transação está "excluída"
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    // Tags livres separadas por vírgula (ex: "viagem,presente")
+    tags: text('tags'),
+    // Comprovante/anexo (data URL ou link) e nome original do arquivo
+    attachmentUrl: text('attachment_url'),
+    attachmentName: varchar('attachment_name', { length: 255 }),
     // Vínculo com o modelo recorrente que gerou esta transação (nullable)
     recurringId: uuid('recurring_id'),
     userId: uuid('user_id').references(() => users.id),
@@ -133,6 +141,7 @@ export const income = pgTable('income', {
   id: uuid('id').primaryKey().defaultRandom(),
   month: varchar('month', { length: 7 }).notNull(), // YYYY-MM
   amount: bigint('amount', { mode: 'number' }).notNull(), // centavos
+  accountId: uuid('account_id'), // conta onde a renda entra (nullable)
   userId: uuid('user_id').references(() => users.id),
 })
 
@@ -360,12 +369,15 @@ export const goals = pgTable(
     currentAmount: bigint('current_amount', { mode: 'number' }).notNull().default(0),
     targetDate: date('target_date'), // prazo (nullable)
     color: varchar('color', { length: 7 }),
+    // Conta vinculada: quando presente, o progresso usa o saldo real da conta
+    accountId: uuid('account_id'),
     archived: boolean('archived').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     userId: uuid('user_id').notNull().references(() => users.id),
   },
   (table) => ({
     userIdx: index('goals_user_id_idx').on(table.userId),
+    accountIdx: index('goals_account_id_idx').on(table.accountId),
   })
 )
 

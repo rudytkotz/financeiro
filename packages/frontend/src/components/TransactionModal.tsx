@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import type { Transaction, Category, Dependent, Account } from '@financeiro/shared'
-import { ArrowDownCircle, ArrowUpCircle, CreditCard, Smartphone, Wallet, Banknote, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, CreditCard, Smartphone, Wallet, Banknote, TrendingUp, TrendingDown, Paperclip, X as XIcon, Tag } from 'lucide-react'
 
 type OperationType = 'despesa' | 'reembolso'
 type TxKind = 'despesa' | 'receita'
@@ -27,6 +27,9 @@ export interface TransactionModalProps {
     operationType: OperationType
     installmentTotal: number
     paymentMethod: string
+    tags: string | null
+    attachmentUrl: string | null
+    attachmentName: string | null
   }) => Promise<void>
   categories: Category[]
   dependents?: Dependent[]
@@ -85,6 +88,9 @@ export default function TransactionModal({
   const [operationType, setOperationType] = useState<OperationType>('despesa')
   const [paymentMethod, setPaymentMethod] = useState('credito')
   const [installmentTotal, setInstallmentTotal] = useState(1)
+  const [tags, setTags] = useState('')
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
+  const [attachmentName, setAttachmentName] = useState<string | null>(null)
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState('')
@@ -114,6 +120,9 @@ export default function TransactionModal({
         setOperationType(detectOperationType(transaction.amount))
         setPaymentMethod((transaction as any).paymentMethod ?? 'credito')
         setInstallmentTotal(transaction.installmentTotal ?? 1)
+        setTags(transaction.tags ?? '')
+        setAttachmentUrl(transaction.attachmentUrl ?? null)
+        setAttachmentName(transaction.attachmentName ?? null)
       } else {
         setDate('')
         setDescription('')
@@ -126,6 +135,9 @@ export default function TransactionModal({
         setOperationType('despesa')
         setPaymentMethod('credito')
         setInstallmentTotal(1)
+        setTags('')
+        setAttachmentUrl(null)
+        setAttachmentName(null)
       }
       setErrors({})
       setServerError('')
@@ -187,6 +199,9 @@ export default function TransactionModal({
         operationType,
         installmentTotal,
         paymentMethod,
+        tags: tags.trim() || null,
+        attachmentUrl,
+        attachmentName,
       })
       onClose()
     } catch (err: unknown) {
@@ -461,6 +476,39 @@ export default function TransactionModal({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label htmlFor="tx-tags" className="mb-1 flex items-center gap-1.5 text-sm font-medium">
+              <Tag className="h-3.5 w-3.5 text-gray-400" /> Tags <span className="text-[10px] font-normal text-gray-400">(separe por vírgula)</span>
+            </label>
+            <input id="tx-tags" type="text" value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Ex: viagem, presente"
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          </div>
+
+          {/* Anexo / comprovante */}
+          <div>
+            <span className="mb-1 flex items-center gap-1.5 text-sm font-medium">
+              <Paperclip className="h-3.5 w-3.5 text-gray-400" /> Comprovante <span className="text-[10px] font-normal text-gray-400">(imagem ou PDF)</span>
+            </span>
+            {attachmentUrl ? (
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                <span className="truncate text-gray-600">{attachmentName ?? 'Anexo'}</span>
+                <button type="button" onClick={() => { setAttachmentUrl(null); setAttachmentName(null) }} className="rounded p-1 text-gray-400 hover:text-red-500" aria-label="Remover anexo"><XIcon className="h-4 w-4" /></button>
+              </div>
+            ) : (
+              <input type="file" accept="image/*,application/pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  if (file.size > 1_500_000) { setServerError('Anexo muito grande (máx 1,5 MB).'); return }
+                  const reader = new FileReader()
+                  reader.onload = () => { setAttachmentUrl(String(reader.result)); setAttachmentName(file.name) }
+                  reader.readAsDataURL(file)
+                }}
+                className="w-full text-xs text-gray-500 file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20" />
+            )}
           </div>
 
           {/* Parcelamento — apenas em criação */}

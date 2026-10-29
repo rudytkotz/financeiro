@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, desc, or, sql } from 'drizzle-orm'
+import { eq, and, gte, lte, desc, or, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { transactions, categories, dependents, imports } from '../db/schema.js'
 import type { Transaction } from '../db/schema.js'
@@ -35,6 +35,9 @@ export interface CreateTransactionData {
   kind?: 'despesa' | 'receita'  // receita = entrada de dinheiro
   installmentTotal?: number  // 1 ou undefined = sem parcelamento; 2–24 = número de parcelas
   paymentMethod?: string
+  tags?: string | null
+  attachmentUrl?: string | null
+  attachmentName?: string | null
 }
 
 export interface UpdateTransactionData {
@@ -46,6 +49,9 @@ export interface UpdateTransactionData {
   accountId?: string | null
   paymentMethod?: string
   operationType?: 'despesa' | 'reembolso'
+  tags?: string | null
+  attachmentUrl?: string | null
+  attachmentName?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +87,9 @@ export async function listTransactions(params: ListTransactionsParams = {}, user
   if (userId) {
     conditions.push(eq(transactions.userId, userId))
   }
+
+  // Oculta transações na lixeira (soft delete)
+  conditions.push(isNull(transactions.deletedAt))
 
   // Filtro por mês: usar referenceMonth diretamente
   if (month) {
@@ -213,6 +222,9 @@ export async function createTransaction(data: CreateTransactionData, userId?: st
         importId: null,
         referenceMonth: date.substring(0, 7),
         paymentMethod: paymentMethod ?? 'credito',
+        tags: data.tags ?? null,
+        attachmentUrl: data.attachmentUrl ?? null,
+        attachmentName: data.attachmentName ?? null,
         userId: userId ?? null,
       })
       .returning()
@@ -368,6 +380,11 @@ export async function updateTransaction(id: string, data: UpdateTransactionData,
     updates.accountId = data.accountId
   }
 
+  // tags e anexo (se fornecidos)
+  if (data.tags !== undefined) updates.tags = data.tags
+  if (data.attachmentUrl !== undefined) updates.attachmentUrl = data.attachmentUrl
+  if (data.attachmentName !== undefined) updates.attachmentName = data.attachmentName
+
   // Atualizar com updatedAt
   updates.updatedAt = new Date()
 
@@ -440,11 +457,44 @@ export async function deleteTransaction(id: string, userId?: string): Promise<vo
     throw makeError(404, 'NOT_FOUND', 'Transação não encontrada.')
   }
 
-  await db.delete(transactions).where(
-    userId
-      ? and(eq(transactions.id, id), eq(transactions.userId, userId))
-      : eq(transactions.id, id),
-  )
+  // Soft delete: marca como excluída (vai para a lixeira), não apaga de fato
+  await db.update(transactions)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(userId ? and(eq(transactions.id, id), eq(transactions.userId, userId)) : eq(transactions.id, id))
+}
+
+/**
+ * Lista as transações na lixeira (soft-deleted) do usuário.
+ */
+export async function listDeletedTransactions(userId: string): Promise<Transaction[]> {
+  return db
+    .select()
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), sql`${transactions.deletedAt} IS NOT NULL`))
+    .orderBy(desc(transactions.deletedAt))
+}
+
+/**
+ * Restaura uma transação da lixeira.
+ */
+export async function restoreTransaction(id: string, userId: string): Promise<void> {
+  const [existing] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+    .limit(1)
+  if (!existing) throw makeError(404, 'NOT_FOUND', 'Transação não encontrada.')
+
+  await db.update(transactions)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
+}
+
+/**
+ * Exclui permanentemente uma transação da lixeira.
+ */
+export async function purgeTransaction(id: string, userId: string): Promise<void> {
+  await db.delete(transactions).where(and(eq(transactions.id, id), eq(transactions.userId, userId)))
 }
 
 /**

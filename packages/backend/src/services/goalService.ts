@@ -3,6 +3,8 @@ import { db } from '../db/index.js'
 import { goals, goalContributions } from '../db/schema.js'
 import type { Goal, GoalContribution } from '../db/schema.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
+import { assertAccountOwnership } from '../lib/ownership.js'
+import { listAccounts } from './accountService.js'
 
 export type { ServiceError }
 
@@ -16,6 +18,7 @@ export interface CreateGoalData {
   targetAmount: number
   targetDate?: string | null
   color?: string | null
+  accountId?: string | null
 }
 
 export type UpdateGoalData = Partial<CreateGoalData> & { archived?: boolean }
@@ -32,12 +35,15 @@ function validate(data: Partial<CreateGoalData>) {
   }
 }
 
-function withProgress(goal: Goal): GoalWithProgress {
+function withProgress(goal: Goal, accountBalance?: number): GoalWithProgress {
+  // Quando a meta está vinculada a uma conta, o progresso usa o saldo real
+  // daquela conta em vez do valor acumulado manualmente.
+  const current = accountBalance !== undefined ? Math.max(accountBalance, 0) : goal.currentAmount
   const percentage = goal.targetAmount > 0
-    ? Math.round((goal.currentAmount / goal.targetAmount) * 10000) / 100
+    ? Math.round((current / goal.targetAmount) * 10000) / 100
     : 0
-  const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0)
-  return { ...goal, percentage, remaining }
+  const remaining = Math.max(goal.targetAmount - current, 0)
+  return { ...goal, currentAmount: current, percentage, remaining }
 }
 
 export async function listGoals(userId: string): Promise<GoalWithProgress[]> {
@@ -46,12 +52,20 @@ export async function listGoals(userId: string): Promise<GoalWithProgress[]> {
     .from(goals)
     .where(eq(goals.userId, userId))
     .orderBy(goals.createdAt)
-  return list.map(withProgress)
+
+  // Se alguma meta está vinculada a conta, resolve o saldo real dessas contas
+  const hasLinked = list.some((g) => g.accountId)
+  if (!hasLinked) return list.map((g) => withProgress(g))
+
+  const accounts = await listAccounts(userId)
+  const balanceById = new Map(accounts.map((a) => [a.id, a.currentBalance]))
+  return list.map((g) => withProgress(g, g.accountId ? balanceById.get(g.accountId) ?? 0 : undefined))
 }
 
 export async function createGoal(data: CreateGoalData, userId: string): Promise<GoalWithProgress> {
   validate(data)
   if (!data.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome da meta é obrigatório.')
+  await assertAccountOwnership(data.accountId, userId)
 
   const [created] = await db
     .insert(goals)
@@ -60,6 +74,7 @@ export async function createGoal(data: CreateGoalData, userId: string): Promise<
       targetAmount: data.targetAmount,
       targetDate: data.targetDate ?? null,
       color: data.color ?? null,
+      accountId: data.accountId ?? null,
       userId,
     })
     .returning()
@@ -80,6 +95,10 @@ export async function updateGoal(id: string, data: UpdateGoalData, userId: strin
   if (data.targetAmount !== undefined) updates.targetAmount = data.targetAmount
   if (data.targetDate !== undefined) updates.targetDate = data.targetDate
   if (data.color !== undefined) updates.color = data.color
+  if (data.accountId !== undefined) {
+    await assertAccountOwnership(data.accountId, userId)
+    updates.accountId = data.accountId
+  }
   if (data.archived !== undefined) updates.archived = data.archived
 
   const [updated] = await db

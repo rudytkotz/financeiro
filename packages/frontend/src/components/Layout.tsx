@@ -6,6 +6,7 @@ import {
   Wallet,
   Target,
   LineChart,
+  BarChart3,
   Shield,
   LogOut,
   Moon,
@@ -29,6 +30,7 @@ export default function Layout() {
     { to: '/transactions', label: 'Transações', icon: ArrowLeftRight },
     { to: '/investments', label: 'Investimentos', icon: LineChart },
     { to: '/goals', label: 'Metas', icon: Target },
+    { to: '/reports', label: 'Relatórios', icon: BarChart3 },
     ...(user?.isAdmin ? [{ to: '/admin', label: 'Admin', icon: Shield }] : []),
   ]
 

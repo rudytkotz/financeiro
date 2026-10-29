@@ -15,6 +15,10 @@ export interface Transaction {
   installmentTotal: number | null
   accountId: string | null
   transferId: string | null
+  tags: string | null              // tags separadas por vírgula
+  attachmentUrl: string | null     // comprovante (data URL ou link)
+  attachmentName: string | null
+  deletedAt: string | null         // soft delete (lixeira)
   kind: 'despesa' | 'receita' | 'transfer'
   recurringId: string | null
   createdAt: string
@@ -56,9 +60,10 @@ export interface Goal {
   id: string
   name: string
   targetAmount: number     // centavos
-  currentAmount: number    // centavos
+  currentAmount: number    // centavos (manual; ignorado quando há conta vinculada)
   targetDate: string | null
   color: string | null
+  accountId: string | null // conta vinculada (progresso puxa o saldo real)
   archived: boolean
   createdAt: string
   percentage: number       // currentAmount / targetAmount * 100
@@ -79,6 +84,7 @@ export interface CreateGoalPayload {
   targetAmount: number
   targetDate?: string | null
   color?: string | null
+  accountId?: string | null
 }
 
 export interface AddContributionPayload {
@@ -133,6 +139,7 @@ export interface Income {
   id: string
   month: string          // YYYY-MM
   amount: number         // positivo, centavos (integer)
+  accountId: string | null // conta onde a renda entra (nullable)
 }
 
 // Contas / carteiras
@@ -487,11 +494,17 @@ export interface CreateTransactionPayload {
   operationType?: 'despesa' | 'reembolso'  // 'despesa' = positivo (padrão); 'reembolso' = negativo
   kind?: 'despesa' | 'receita'             // receita = entrada de dinheiro
   installmentTotal?: number                // 1 ou undefined = à vista; 2–24 = parcelado
+  tags?: string | null
+  attachmentUrl?: string | null
+  attachmentName?: string | null
 }
 
 export interface UpdateTransactionPayload extends Partial<CreateTransactionPayload> {
   paymentMethod?: string
   dependentId?: string | null
+  tags?: string | null
+  attachmentUrl?: string | null
+  attachmentName?: string | null
 }
 
 export interface SetDependentPayload {
@@ -510,6 +523,7 @@ export interface CreateDependentPayload {
 
 export interface SetIncomePayload {
   amount: number         // centavos
+  accountId?: string | null
 }
 
 // Orçamento por categoria
@@ -557,4 +571,101 @@ export interface DuplicateImportError extends ApiError {
 
 export interface ConflictDependentError extends ApiError {
   requiresConfirmation: true
+}
+
+// ---------------------------------------------------------------------------
+// Novas análises e ferramentas
+// ---------------------------------------------------------------------------
+
+// Comparativo mensal (este mês vs anterior vs média)
+export interface MonthComparisonCategory {
+  categoryId: string | null
+  categoryName: string
+  current: number       // centavos
+  previous: number      // centavos
+  average: number       // centavos (média dos meses anteriores analisados)
+  changePct: number | null // variação % vs mês anterior (null se anterior = 0)
+}
+
+export interface MonthComparison {
+  month: string
+  previousMonth: string
+  monthsAnalyzed: number
+  currentTotal: number
+  previousTotal: number
+  averageTotal: number
+  changePct: number | null
+  categories: MonthComparisonCategory[]
+}
+
+// Fluxo de caixa projetado do mês (o que ainda vai entrar/sair)
+export interface CashFlowItem {
+  description: string
+  amount: number        // centavos (positivo = saída, negativo = entrada)
+  date: string          // YYYY-MM-DD previsto
+  kind: 'recorrente' | 'parcela' | 'renda'
+}
+
+export interface CashFlowForecast {
+  month: string
+  currentBalance: number     // saldo somado das contas hoje
+  realizedExpenses: number   // já gasto no mês
+  realizedIncome: number     // já recebido no mês
+  pendingItems: CashFlowItem[]
+  projectedExpenses: number  // pendentes de saída
+  projectedIncome: number    // pendentes de entrada
+  projectedEndBalance: number
+}
+
+// Evolução patrimonial consolidada (contas + investimentos) mês a mês
+export interface NetWorthPoint {
+  month: string
+  accounts: number       // saldo em contas (centavos)
+  investments: number    // valor investido (centavos)
+  total: number
+}
+
+// Retrospectiva anual
+export interface YearlyReport {
+  year: number
+  totalIncome: number
+  totalExpenses: number
+  balance: number
+  savingsRate: number
+  topCategories: Array<{ categoryName: string; amount: number }>
+  byMonth: Array<{ month: string; income: number; expenses: number; balance: number }>
+  mostExpensiveMonth: { month: string; amount: number } | null
+}
+
+// Busca global de transações (atravessa meses)
+export interface TransactionSearchResult {
+  transactions: Transaction[]
+  total: number       // soma dos amounts encontrados
+  count: number
+}
+
+// Calculadora de juros compostos / simulação de aportes e dividendos
+export interface CompoundSimInput {
+  initialAmount: number     // aporte inicial (centavos)
+  monthlyContribution: number // aporte mensal (centavos)
+  months: number            // período em meses
+  annualReturnPct: number   // rentabilidade anual esperada (%)
+  annualDividendYieldPct: number // DY anual (%) para projeção de proventos
+}
+
+export interface CompoundSimPoint {
+  month: number
+  invested: number          // total aportado acumulado (centavos)
+  balance: number           // patrimônio acumulado (centavos)
+  dividends: number         // proventos no mês (centavos)
+  accumulatedDividends: number // proventos acumulados (centavos)
+}
+
+export interface CompoundSimResult {
+  points: CompoundSimPoint[]
+  finalBalance: number
+  totalInvested: number
+  totalReturn: number
+  totalDividends: number
+  monthlyDividendAtEnd: number
 }

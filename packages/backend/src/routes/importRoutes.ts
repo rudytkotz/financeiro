@@ -8,6 +8,7 @@ import {
   resolvePortadorToDependents,
   insertStandaloneTransactions,
   filterDuplicateInstallments,
+  suggestCategories,
   type ImportTransaction,
 } from '../services/importService.js'
 import { getUserId } from '../lib/auth.js'
@@ -186,6 +187,16 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      // Auto-categorização: preenche a categoria mais usada no histórico para
+      // descrições iguais, quando o usuário não definiu uma manualmente.
+      const suggestions = await suggestCategories(valid.map((t) => t.description), getUserId(request))
+      for (const t of valid) {
+        if (!t.categoryId) {
+          const sug = suggestions[t.description.trim().toLowerCase()]
+          if (sug) t.categoryId = sug
+        }
+      }
+
       // 3. Usar referenceMonth do payload (escolhido pelo usuário) ou calcular
       const referenceMonth = body.referenceMonth && /^\d{4}-\d{2}$/.test(body.referenceMonth)
         ? body.referenceMonth
@@ -269,6 +280,14 @@ const importRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/imports', async (request, reply) => {
     const importsList = await listImports(getUserId(request))
     return reply.send(importsList)
+  })
+
+  // POST /api/imports/suggest-categories — sugere categorias por histórico
+  app.post('/api/imports/suggest-categories', async (request, reply) => {
+    const body = request.body as { descriptions?: string[] }
+    const descriptions = Array.isArray(body.descriptions) ? body.descriptions.slice(0, 500) : []
+    const map = await suggestCategories(descriptions, getUserId(request))
+    return reply.send(map)
   })
 }
 

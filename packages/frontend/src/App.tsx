@@ -11,6 +11,7 @@ const TransactionsPage = lazy(() => import('./pages/TransactionsPage'))
 const AccountsPage = lazy(() => import('./pages/AccountsPage'))
 const GoalsPage = lazy(() => import('./pages/GoalsPage'))
 const InvestmentsPage = lazy(() => import('./pages/InvestmentsPage'))
+const ReportsPage = lazy(() => import('./pages/ReportsPage'))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -58,6 +59,10 @@ function App() {
         <Route
           path="/investments"
           element={<Suspense fallback={<PageLoader />}><InvestmentsPage /></Suspense>}
+        />
+        <Route
+          path="/reports"
+          element={<Suspense fallback={<PageLoader />}><ReportsPage /></Suspense>}
         />
         {/* Dependentes agora vive dentro de Transações (aba) */}
         <Route path="/dependents" element={<Navigate to="/transactions" replace state={{ tab: 'dependents' }} />} />

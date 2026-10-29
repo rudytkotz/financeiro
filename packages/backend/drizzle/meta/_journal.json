@@ -169,6 +169,13 @@
       "when": 1726300000000,
       "tag": "0023_claim_orphan_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1726400000000,
+      "tag": "0024_feature_pack",
+      "breakpoints": true
     }
   ]
 }

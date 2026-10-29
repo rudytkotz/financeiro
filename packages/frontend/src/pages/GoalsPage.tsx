@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useGoals, useCreateGoal, useDeleteGoal, useAddContribution } from '@/hooks/useGoals'
+import { useAccounts } from '@/hooks/useAccounts'
+import AccountSelect from '@/components/AccountSelect'
 import type { Goal } from '@financeiro/shared'
-import { Target, Plus, Trash2, PiggyBank, Check } from 'lucide-react'
+import { Target, Plus, Trash2, PiggyBank, Check, Link2 } from 'lucide-react'
 
 function formatCurrency(cents: number) {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -19,6 +21,7 @@ function today() {
 
 export default function GoalsPage() {
   const { data: goals, isLoading } = useGoals()
+  const { data: accounts } = useAccounts()
   const createGoal = useCreateGoal()
   const deleteGoal = useDeleteGoal()
 
@@ -26,6 +29,7 @@ export default function GoalsPage() {
   const [name, setName] = useState('')
   const [targetAmount, setTargetAmount] = useState('')
   const [targetDate, setTargetDate] = useState('')
+  const [accountId, setAccountId] = useState('')
   const [error, setError] = useState('')
 
   function handleCreate() {
@@ -33,13 +37,15 @@ export default function GoalsPage() {
     if (!name.trim()) { setError('Informe o nome da meta.'); return }
     if (cents <= 0) { setError('Informe o valor alvo.'); return }
     createGoal.mutate(
-      { name: name.trim(), targetAmount: cents, targetDate: targetDate || null },
+      { name: name.trim(), targetAmount: cents, targetDate: targetDate || null, accountId: accountId || null },
       {
-        onSuccess: () => { setName(''); setTargetAmount(''); setTargetDate(''); setShowForm(false); setError('') },
+        onSuccess: () => { setName(''); setTargetAmount(''); setTargetDate(''); setAccountId(''); setShowForm(false); setError('') },
         onError: () => setError('Erro ao criar a meta.'),
       },
     )
   }
+
+  const accountName = (id: string | null) => (id ? (accounts ?? []).find((a) => a.id === id)?.name ?? null : null)
 
   return (
     <div className="space-y-6">
@@ -67,6 +73,13 @@ export default function GoalsPage() {
             <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} aria-label="Prazo (opcional)"
               className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
+          {(accounts ?? []).length > 0 && (
+            <div className="mt-3">
+              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">Vincular a uma conta (opcional)</label>
+              <AccountSelect accounts={accounts ?? []} value={accountId} onChange={setAccountId} emptyLabel="Aporte manual (sem conta)" />
+              <p className="mt-1 text-[10px] text-gray-400">Se vincular, o progresso usa o saldo real da conta automaticamente.</p>
+            </div>
+          )}
           <div className="mt-3 flex justify-end gap-2">
             <button onClick={() => { setShowForm(false); setError('') }} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancelar</button>
             <button onClick={handleCreate} disabled={createGoal.isPending} className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
@@ -87,7 +100,7 @@ export default function GoalsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {(goals ?? []).map((goal) => (
-            <GoalCard key={goal.id} goal={goal} onDelete={() => deleteGoal.mutate(goal.id)} />
+            <GoalCard key={goal.id} goal={goal} linkedAccountName={accountName(goal.accountId)} onDelete={() => deleteGoal.mutate(goal.id)} />
           ))}
         </div>
       )}
@@ -95,7 +108,7 @@ export default function GoalsPage() {
   )
 }
 
-function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: () => void }) {
+function GoalCard({ goal, linkedAccountName, onDelete }: { goal: Goal; linkedAccountName: string | null; onDelete: () => void }) {
   const addContribution = useAddContribution()
   const [adding, setAdding] = useState(false)
   const [value, setValue] = useState('')
@@ -103,6 +116,7 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: () => void }) {
   const pct = Math.min(goal.percentage, 100)
   const complete = goal.currentAmount >= goal.targetAmount
   const accent = goal.color ?? '#3b82f6'
+  const isLinked = !!goal.accountId
 
   function save() {
     const cents = parseCurrency(value)
@@ -123,6 +137,9 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: () => void }) {
           <div>
             <p className="text-sm font-semibold text-gray-800">{goal.name}</p>
             {goal.targetDate && <p className="text-[11px] text-gray-400">Prazo: {goal.targetDate.split('-').reverse().join('/')}</p>}
+            {isLinked && linkedAccountName && (
+              <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-primary"><Link2 className="h-2.5 w-2.5" /> {linkedAccountName}</p>
+            )}
           </div>
         </div>
         <button onClick={onDelete} className="rounded-lg p-1.5 text-gray-300 hover:bg-red-50 hover:text-red-500" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -142,7 +159,11 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: () => void }) {
       </div>
 
       <div className="mt-4">
-        {adding ? (
+        {isLinked ? (
+          <p className="rounded-lg bg-gray-50 py-2 text-center text-[11px] text-gray-400">
+            Progresso automático pelo saldo da conta vinculada.
+          </p>
+        ) : adding ? (
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400">R$</span>
             <input autoFocus value={value} inputMode="decimal" onChange={(e) => setValue(e.target.value)}

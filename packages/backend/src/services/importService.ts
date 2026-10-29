@@ -14,7 +14,7 @@ export interface ImportTransaction {
   date: string // YYYY-MM-DD
   description: string
   amount: number // centavos, positivo
-  categoryId: string
+  categoryId?: string | null
   dependentId?: string | null
   accountId?: string | null
   portador?: string | null
@@ -146,7 +146,7 @@ export async function saveImport(transactionList: ImportTransaction[], explicitR
         date: t.date,
         description: t.description,
         amount: t.amount,
-        categoryId: null, // categoria definida pelo usuario
+        categoryId: t.categoryId ?? null, // auto-categorização ou definido depois
         dependentId: t.dependentId ?? null,
         accountId: t.accountId ?? null,
         portador: t.portador ?? null,
@@ -434,4 +434,48 @@ export async function filterDuplicateInstallments(transactionList: ImportTransac
   })
 
   return [...nonInstallmented, ...filteredInstallmented]
+}
+
+/**
+ * Sugere categorias para um conjunto de descrições com base no histórico do
+ * usuário: para cada descrição, procura a categoria mais usada em transações
+ * passadas com descrição igual (case-insensitive). Usado na importação para
+ * pré-preencher a categoria e reduzir trabalho manual.
+ *
+ * Retorna um mapa (lowercase description) -> categoryId.
+ */
+export async function suggestCategories(descriptions: string[], userId: string): Promise<Record<string, string>> {
+  const unique = [...new Set(descriptions.map((d) => d.trim().toLowerCase()).filter(Boolean))]
+  if (unique.length === 0) return {}
+
+  // Busca, por descrição (lower), a categoria mais frequente já usada pelo usuário
+  const rows = await db
+    .select({
+      description: sql<string>`lower(${transactions.description})`,
+      categoryId: transactions.categoryId,
+      count: sql<string>`COUNT(*)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.userId, userId),
+        sql`${transactions.categoryId} IS NOT NULL`,
+        sql`${transactions.deletedAt} IS NULL`,
+        inArray(sql`lower(${transactions.description})`, unique),
+      ),
+    )
+    .groupBy(sql`lower(${transactions.description})`, transactions.categoryId)
+
+  // Escolhe a categoria com maior contagem por descrição
+  const best = new Map<string, { categoryId: string; count: number }>()
+  for (const r of rows) {
+    if (!r.categoryId) continue
+    const cur = best.get(r.description)
+    const count = Number(r.count)
+    if (!cur || count > cur.count) best.set(r.description, { categoryId: r.categoryId, count })
+  }
+
+  const result: Record<string, string> = {}
+  for (const [desc, v] of best) result[desc] = v.categoryId
+  return result
 }

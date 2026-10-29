@@ -13,8 +13,8 @@ const incomeRoutes: FastifyPluginAsync = async (app) => {
 
   app.put('/api/income/:month', async (request, reply) => {
     const { month } = parse(monthParamSchema, request.params)
-    const { amount } = parse(setIncomeSchema, request.body)
-    const record = await setIncome(month, amount, getUserId(request))
+    const { amount, accountId } = parse(setIncomeSchema, request.body)
+    const record = await setIncome(month, amount, getUserId(request), accountId)
     return reply.status(200).send(record)
   })
 }

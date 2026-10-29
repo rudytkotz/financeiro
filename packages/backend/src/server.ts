@@ -28,6 +28,7 @@ import importRoutes from './routes/importRoutes.js'
 import incomeRoutes from './routes/incomeRoutes.js'
 import transactionRoutes from './routes/transactionRoutes.js'
 import investmentRoutes from './routes/investmentRoutes.js'
+import analyticsRoutes from './routes/analyticsRoutes.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -137,6 +138,7 @@ await app.register(importRoutes)
 await app.register(incomeRoutes)
 await app.register(transactionRoutes)
 await app.register(investmentRoutes)
+await app.register(analyticsRoutes)
 
 // ---------------------------------------------------------------------------
 // Frontend estático (produção)

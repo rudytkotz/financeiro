@@ -26,6 +26,7 @@ import { CategoriesSection } from './CategoriesPage'
 import { DependentsSection } from './DependentsPage'
 import BudgetsSection from './BudgetsSection'
 import RecurringSection from './RecurringSection'
+import SearchSection from './SearchSection'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -249,7 +250,7 @@ function TransactionsSection() {
   const clearFilters = () => { setCategoryId(''); setDependentId(''); setAccountId(''); setPaymentMethodFilter(''); setSearchText('') }
   function handleOpenCreate() { setEditingTransaction(null); setModalOpen(true) }
   function handleCloseModal() { setModalOpen(false); setEditingTransaction(null) }
-  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; dependentId: string | null; accountId: string | null; kind: 'despesa' | 'receita'; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string }) {
+  async function handleSubmit(data: { date: string; description: string; amount: number; categoryId: string; dependentId: string | null; accountId: string | null; kind: 'despesa' | 'receita'; operationType: 'despesa' | 'reembolso'; installmentTotal: number; paymentMethod: string; tags: string | null; attachmentUrl: string | null; attachmentName: string | null }) {
     if (editingTransaction) await updateMutation.mutateAsync({ id: editingTransaction.id, payload: data })
     else await createMutation.mutateAsync(data)
   }
@@ -566,10 +567,11 @@ function TransactionsSection() {
 // ===========================================================================
 // PAGE WRAPPER — abas: Transações · Importar · Categorias
 // ===========================================================================
-type TabKey = 'transactions' | 'budget' | 'recurring' | 'import' | 'categories' | 'dependents'
+type TabKey = 'transactions' | 'search' | 'budget' | 'recurring' | 'import' | 'categories' | 'dependents'
 
 const TABS: { key: TabKey; label: string; icon: typeof ArrowLeftRight }[] = [
   { key: 'transactions', label: 'Transações', icon: ArrowLeftRight },
+  { key: 'search', label: 'Buscar', icon: Search },
   { key: 'budget', label: 'Orçamento', icon: Target },
   { key: 'recurring', label: 'Recorrentes', icon: Repeat },
   { key: 'import', label: 'Importar', icon: Upload },
@@ -606,6 +608,7 @@ export default function TransactionsPage() {
       </div>
 
       {tab === 'transactions' && <TransactionsSection />}
+      {tab === 'search' && <SearchSection />}
       {tab === 'budget' && <BudgetsSection />}
       {tab === 'recurring' && <RecurringSection />}
       {tab === 'import' && <ImportSection />}

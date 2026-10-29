@@ -16,7 +16,7 @@ export async function getIncome(month: string, userId: string): Promise<Income |
   return record ?? null
 }
 
-export async function setIncome(month: string, amount: number, userId: string): Promise<Income> {
+export async function setIncome(month: string, amount: number, userId: string, accountId?: string | null): Promise<Income> {
   if (!Number.isInteger(amount) || amount < 1 || amount > 99_999_999_999) {
     throw makeError(422, 'VALIDATION_ERROR', 'O valor da renda deve ser entre R$ 0,01 e R$ 999.999.999,99.')
   }
@@ -28,10 +28,12 @@ export async function setIncome(month: string, amount: number, userId: string): 
     .where(and(eq(income.month, month), eq(income.userId, userId)))
     .limit(1)
 
+  const accountValue = accountId === undefined ? undefined : accountId ?? null
+
   if (existing) {
     const [updated] = await db
       .update(income)
-      .set({ amount })
+      .set(accountValue === undefined ? { amount } : { amount, accountId: accountValue })
       .where(and(eq(income.id, existing.id), eq(income.userId, userId)))
       .returning()
     return updated
@@ -39,7 +41,7 @@ export async function setIncome(month: string, amount: number, userId: string): 
 
   const [created] = await db
     .insert(income)
-    .values({ month, amount, userId })
+    .values({ month, amount, accountId: accountValue ?? null, userId })
     .returning()
 
   return created

@@ -8,6 +8,9 @@ import {
   associateDependent,
   createTransfer,
   deleteTransfer,
+  listDeletedTransactions,
+  restoreTransaction,
+  purgeTransaction,
 } from '../services/transactionService.js'
 import { getUserId } from '../lib/auth.js'
 import { parse } from '../lib/validation.js'
@@ -45,6 +48,23 @@ const transactionRoutes: FastifyPluginAsync = async (app) => {
   app.delete('/api/transactions/transfer/:id', async (request, reply) => {
     const { id } = parse(idParamSchema, request.params)
     await deleteTransfer(id, getUserId(request))
+    return reply.status(204).send()
+  })
+
+  // Lixeira (soft delete)
+  app.get('/api/transactions/trash', async (request, reply) => {
+    return reply.send(await listDeletedTransactions(getUserId(request)))
+  })
+
+  app.put('/api/transactions/:id/restore', async (request, reply) => {
+    const { id } = parse(idParamSchema, request.params)
+    await restoreTransaction(id, getUserId(request))
+    return reply.status(204).send()
+  })
+
+  app.delete('/api/transactions/:id/purge', async (request, reply) => {
+    const { id } = parse(idParamSchema, request.params)
+    await purgeTransaction(id, getUserId(request))
     return reply.status(204).send()
   })
 
