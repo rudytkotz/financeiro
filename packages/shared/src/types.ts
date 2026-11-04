@@ -186,6 +186,34 @@ export interface AccountSummary {
   limitUsagePct?: number | null
 }
 
+export interface AccountsOverviewCounts {
+  total: number
+  operational: number
+  archived: number
+  cartoes: number
+  investimentos: number
+}
+
+export interface AccountsOverviewCardsSummary {
+  count: number
+  totalLimit: number
+  totalUsage: number
+}
+
+export interface AccountsOverviewInvestmentsSummary {
+  linked: number
+  orphans: number
+}
+
+export interface AccountsOverviewSummary {
+  operationalBalance: number
+  totalInvested: number
+  patrimonio: number
+  cards: AccountsOverviewCardsSummary
+  investments: AccountsOverviewInvestmentsSummary
+  counts: AccountsOverviewCounts
+}
+
 // Fatura de cartão de crédito
 export interface InvoiceSummary {
   accountId: string

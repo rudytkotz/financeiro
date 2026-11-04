@@ -3,7 +3,7 @@ import { db } from '../db/index.js'
 import { accounts, transactions, investments } from '../db/schema.js'
 import type { Account } from '../db/schema.js'
 import { makeError, type ServiceError } from '../lib/errors.js'
-import { getRvPositions } from './investmentService.js'
+import { getPortfolioSummary, getRvPositions } from './investmentService.js'
 import { assertAccountOwnership, assertDependentOwnership } from '../lib/ownership.js'
 
 export type { ServiceError }
@@ -39,14 +39,111 @@ export interface CreateAccountData {
 
 export type UpdateAccountData = Partial<CreateAccountData> & { archived?: boolean }
 
+export interface AccountsOverviewCounts {
+  total: number
+  operational: number
+  archived: number
+  cartoes: number
+  investimentos: number
+}
+
+export interface AccountsOverviewCardsSummary {
+  count: number
+  totalLimit: number
+  totalUsage: number
+}
+
+export interface AccountsOverviewInvestmentsSummary {
+  linked: number
+  orphans: number
+}
+
+export interface AccountsOverviewSummary {
+  operationalBalance: number
+  totalInvested: number
+  patrimonio: number
+  cards: AccountsOverviewCardsSummary
+  investments: AccountsOverviewInvestmentsSummary
+  counts: AccountsOverviewCounts
+}
+
 const VALID_TYPES = ['corrente', 'poupanca', 'carteira', 'cartao', 'investimento', 'outro']
 
-function validate(data: CreateAccountData | UpdateAccountData) {
+export function buildAccountsOverviewSummary(input: {
+  accounts: Array<{ id: string; type: string; initialBalance: number; archived: boolean; creditLimit?: number | null; currentBalance?: number }>
+  totalInvested: number
+  cardUsageByAccount?: Map<string, number>
+  linkedInvestmentCount?: number
+  orphanInvestmentCount?: number
+  counts?: AccountsOverviewCounts
+}): AccountsOverviewSummary {
+  const operationalAccounts = input.accounts.filter(
+    (account) => !account.archived && ['corrente', 'poupanca', 'carteira', 'outro'].includes(account.type),
+  )
+
+  const cards = input.accounts.filter((account) => !account.archived && account.type === 'cartao')
+  const cardUsageByAccount = input.cardUsageByAccount ?? new Map<string, number>()
+  const totalUsage = cards.reduce((sum, card) => sum + (cardUsageByAccount.get(card.id) ?? 0), 0)
+  const totalLimit = cards.reduce((sum, card) => sum + (card.creditLimit ?? 0), 0)
+
+  const operationalBalance = operationalAccounts.reduce((sum, account) => {
+    const current = account.currentBalance ?? account.initialBalance
+    return sum + current
+  }, 0)
+
+  const counts = input.counts ?? {
+    total: input.accounts.length,
+    operational: operationalAccounts.length,
+    archived: input.accounts.filter((account) => account.archived).length,
+    cartoes: cards.length,
+    investimentos: input.accounts.filter((account) => !account.archived && account.type === 'investimento').length,
+  }
+
+  return {
+    operationalBalance,
+    totalInvested: input.totalInvested,
+    patrimonio: operationalBalance + input.totalInvested,
+    cards: {
+      count: cards.length,
+      totalLimit,
+      totalUsage,
+    },
+    investments: {
+      linked: input.linkedInvestmentCount ?? 0,
+      orphans: input.orphanInvestmentCount ?? 0,
+    },
+    counts,
+  }
+}
+
+export function validateAccountParentLink(
+  type: string | undefined,
+  parentAccountId: string | null | undefined,
+  currentAccountId?: string | null,
+): void {
+  if (!parentAccountId) return
+
+  if (type !== 'cartao') {
+    throw makeError(422, 'VALIDATION_ERROR', 'Cartões só podem ter conta pai.')
+  }
+
+  if (currentAccountId && parentAccountId === currentAccountId) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Uma conta não pode ser vinculada a si mesma.')
+  }
+}
+
+function validate(data: CreateAccountData | UpdateAccountData, currentType?: string, currentAccountId?: string) {
   if ('name' in data && data.name !== undefined && !data.name.trim()) {
     throw makeError(422, 'VALIDATION_ERROR', 'O nome da conta é obrigatório.')
   }
   if (data.type !== undefined && !VALID_TYPES.includes(data.type)) {
     throw makeError(422, 'VALIDATION_ERROR', 'Tipo de conta inválido.')
+  }
+
+  if (currentType !== undefined || data.type !== undefined || data.parentAccountId !== undefined) {
+    const effectiveType = data.type ?? currentType
+    const effectiveParentAccountId = data.parentAccountId ?? null
+    validateAccountParentLink(effectiveType, effectiveParentAccountId, currentAccountId)
   }
 }
 
@@ -210,8 +307,71 @@ export async function getAccountsSummary(userId: string): Promise<AccountSummary
   })
 }
 
+export async function getAccountsOverviewSummary(userId: string): Promise<AccountsOverviewSummary> {
+  const [allAccounts, portfolio] = await Promise.all([
+    listAccounts(userId),
+    getPortfolioSummary(userId),
+  ])
+
+  const cardUsageByAccount = new Map<string, number>()
+  const cardTxAgg = await db
+    .select({
+      accountId: transactions.accountId,
+      total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(and(
+      eq(transactions.userId, userId),
+      eq(transactions.kind, 'despesa'),
+      sql`${transactions.deletedAt} IS NULL`,
+    ))
+    .groupBy(transactions.accountId)
+
+  for (const row of cardTxAgg) {
+    if (!row.accountId) continue
+    cardUsageByAccount.set(row.accountId, Number(row.total))
+  }
+
+  const [{ linkedCount }, { orphanCount }] = await Promise.all([
+    db
+      .select({ linkedCount: sql<number>`COUNT(*)` })
+      .from(investments)
+      .where(and(eq(investments.userId, userId), sql`${investments.accountId} IS NOT NULL`))
+      .then((rows) => ({ linkedCount: Number(rows[0]?.linkedCount ?? 0) })),
+    db
+      .select({ orphanCount: sql<number>`COUNT(*)` })
+      .from(investments)
+      .where(and(eq(investments.userId, userId), sql`${investments.accountId} IS NULL`))
+      .then((rows) => ({ orphanCount: Number(rows[0]?.orphanCount ?? 0) })),
+  ])
+
+  const counts: AccountsOverviewCounts = {
+    total: allAccounts.length,
+    operational: allAccounts.filter((account) => !account.archived && ['corrente', 'poupanca', 'carteira', 'outro'].includes(account.type)).length,
+    archived: allAccounts.filter((account) => account.archived).length,
+    cartoes: allAccounts.filter((account) => !account.archived && account.type === 'cartao').length,
+    investimentos: allAccounts.filter((account) => !account.archived && account.type === 'investimento').length,
+  }
+
+  return buildAccountsOverviewSummary({
+    accounts: allAccounts.map((account) => ({
+      id: account.id,
+      type: account.type,
+      initialBalance: account.initialBalance,
+      archived: account.archived,
+      creditLimit: account.creditLimit,
+      currentBalance: account.currentBalance,
+    })),
+    totalInvested: portfolio.totalInvested,
+    cardUsageByAccount,
+    linkedInvestmentCount: linkedCount,
+    orphanInvestmentCount: orphanCount,
+    counts,
+  })
+}
+
 export async function createAccount(data: CreateAccountData, userId: string): Promise<Account> {
-  validate(data)
+  validate(data, data.type)
   if (!data.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome da conta é obrigatório.')
 
   // Garante que a conta-pai e o dependente informados são do próprio usuário
@@ -238,13 +398,14 @@ export async function createAccount(data: CreateAccountData, userId: string): Pr
 }
 
 export async function updateAccount(id: string, data: UpdateAccountData, userId: string): Promise<Account> {
-  validate(data)
   const [existing] = await db
-    .select({ id: accounts.id })
+    .select({ id: accounts.id, type: accounts.type, parentAccountId: accounts.parentAccountId })
     .from(accounts)
     .where(and(eq(accounts.id, id), eq(accounts.userId, userId)))
     .limit(1)
   if (!existing) throw makeError(404, 'NOT_FOUND', 'Conta não encontrada.')
+
+  validate(data, existing.type, id)
 
   const updates: Record<string, unknown> = {}
   if (data.name !== undefined) updates.name = data.name.trim()
@@ -255,10 +416,6 @@ export async function updateAccount(id: string, data: UpdateAccountData, userId:
   if (data.dueDay !== undefined) updates.dueDay = data.dueDay
   if (data.creditLimit !== undefined) updates.creditLimit = data.creditLimit
   if (data.parentAccountId !== undefined) {
-    // Impede vincular a conta a si mesma
-    if (data.parentAccountId === id) {
-      throw makeError(422, 'VALIDATION_ERROR', 'Uma conta não pode ser vinculada a si mesma.')
-    }
     await assertAccountOwnership(data.parentAccountId, userId)
     updates.parentAccountId = data.parentAccountId
   }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useInvoice, useAccountsSummary,
+  useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useInvoice, useAccountsSummary, useAccountsOverview,
 } from '@/hooks/useAccounts'
 import { useDependents } from '@/hooks/useDependents'
 import { useInvestments, usePortfolioSummary, useUpdateRvInvestment } from '@/hooks/useInvestments'
@@ -13,7 +13,7 @@ import TransferModal from '@/components/TransferModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { cn } from '@/lib/utils'
 import {
-  Wallet, CreditCard, Plus, Trash2, Pencil, Receipt, ChevronLeft, ChevronRight,
+  Wallet as WalletIcon, CreditCard as CreditCardIcon, Plus, Trash2, Pencil, Receipt, ChevronLeft, ChevronRight,
   Archive, ArchiveRestore, LayoutGrid, Landmark, TrendingUp, ExternalLink, ArrowLeftRight,
 } from 'lucide-react'
 
@@ -55,6 +55,7 @@ export default function AccountsPage() {
   const { data: accounts, isLoading } = useAccounts()
   const { data: dependents } = useDependents()
   const { data: summaryList } = useAccountsSummary()
+  const { data: overview } = useAccountsOverview()
   const { data: investments = [] } = useInvestments()
   const { data: portfolio } = usePortfolioSummary()
   const createAccount = useCreateAccount()
@@ -77,37 +78,46 @@ export default function AccountsPage() {
     () => new Map((summaryList ?? []).map((s) => [s.accountId, s])),
     [summaryList],
   )
-  const totalInvested = portfolio?.totalInvested ?? 0
+  const totalInvested = overview?.totalInvested ?? portfolio?.totalInvested ?? 0
+  const cartoes = useMemo(() => active.filter((a) => a.type === 'cartao'), [active])
 
-  // Totais por grupo (apenas contas ativas)
-  const saldoContas = useMemo(
+  const fallbackSaldoContas = useMemo(
     () => active.filter((a) => TAB_TYPES.contas.includes(a.type)).reduce((s, a) => s + a.currentBalance, 0),
     [active],
   )
-  const cartoes = useMemo(() => active.filter((a) => a.type === 'cartao'), [active])
-  const totalUsoCartoes = useMemo(
+  const fallbackTotalUsoCartoes = useMemo(
     () => cartoes.reduce((sum, account) => sum + (summaryById.get(account.id)?.cardUsageCurrent ?? 0), 0),
     [cartoes, summaryById],
   )
-  const limiteTotal = useMemo(
+  const fallbackLimiteTotal = useMemo(
     () => cartoes.reduce((sum, account) => sum + (account.creditLimit ?? 0), 0),
     [cartoes],
   )
+
+  const saldoContas = overview?.operationalBalance ?? fallbackSaldoContas
+  const totalUsoCartoes = overview?.cards.totalUsage ?? fallbackTotalUsoCartoes
+  const limiteTotal = overview?.cards.totalLimit ?? fallbackLimiteTotal
+
   // Patrimônio exibido = saldo das contas operacionais + total investido real,
   // incluindo investimentos sem conta vinculada.
-  const patrimonio = saldoContas + totalInvested
+  const patrimonio = overview?.patrimonio ?? (saldoContas + totalInvested)
 
-  const counts = {
+  const counts = overview?.counts ? {
+    contas: overview.counts.operational,
+    cartoes: overview.counts.cartoes,
+    investimentos: overview.counts.investimentos,
+    arquivadas: overview.counts.archived,
+  } : {
     contas: active.filter((a) => TAB_TYPES.contas.includes(a.type)).length,
     cartoes: cartoes.length,
     investimentos: active.filter((a) => a.type === 'investimento').length,
     arquivadas: archived.length,
   }
 
-  const TABS: { key: TabKey; label: string; icon: typeof Wallet; count?: number }[] = [
+  const TABS: { key: TabKey; label: string; icon: typeof WalletIcon; count?: number }[] = [
     { key: 'overview', label: 'Visão geral', icon: LayoutGrid },
     { key: 'contas', label: 'Contas', icon: Landmark, count: counts.contas },
-    { key: 'cartoes', label: 'Cartões', icon: CreditCard, count: counts.cartoes },
+    { key: 'cartoes', label: 'Cartões', icon: CreditCardIcon, count: counts.cartoes },
     { key: 'investimentos', label: 'Investimentos', icon: TrendingUp, count: counts.investimentos },
     ...(counts.arquivadas > 0 ? [{ key: 'arquivadas' as TabKey, label: 'Arquivadas', icon: Archive, count: counts.arquivadas }] : []),
   ]
@@ -254,7 +264,7 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, totalUso
   if (accounts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-16 text-center">
-        <div className="mb-4 rounded-2xl bg-primary/5 p-5"><Wallet className="h-10 w-10 text-primary/50" /></div>
+        <div className="mb-4 rounded-2xl bg-primary/5 p-5"><WalletIcon className="h-10 w-10 text-primary/50" /></div>
         <p className="text-sm font-semibold text-gray-600">Nenhuma conta cadastrada</p>
         <p className="mt-1 max-w-[240px] text-xs text-gray-400">Adicione suas contas, carteiras e cartões para acompanhar o saldo em um só lugar.</p>
         <button onClick={onCreate} className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -269,7 +279,7 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, totalUso
       {/* Cards de resumo */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-l-4 border-l-primary/60 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-gray-400"><Wallet className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Patrimônio</span></div>
+          <div className="flex items-center gap-2 text-gray-400"><WalletIcon className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Patrimônio</span></div>
           <p className={`mt-1.5 text-xl font-bold lg:text-2xl ${patrimonio >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatCurrency(patrimonio)}</p>
           <p className="mt-0.5 text-[11px] text-gray-400">Contas + investimentos</p>
         </div>
@@ -284,7 +294,7 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, totalUso
           <p className="mt-0.5 text-[11px] text-gray-400">Vinculado a contas</p>
         </div>
         <div className="rounded-2xl border border-l-4 border-l-blue-400 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-gray-400"><CreditCard className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Cartões</span></div>
+          <div className="flex items-center gap-2 text-gray-400"><CreditCardIcon className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Cartões</span></div>
           <p className="mt-1.5 text-xl font-bold text-gray-900 lg:text-2xl">{cartoes.length}</p>
           <p className="mt-0.5 text-[11px] text-gray-400">
             Limite: {limiteTotal > 0 ? formatCurrency(limiteTotal) : '—'}
@@ -486,7 +496,7 @@ function AccountCard({ account, archivedView, linkedCards, parentAccount, ownerN
         <div className="mt-3 flex flex-wrap gap-1.5">
           {linkedCards.map((c) => (
             <span key={c.id} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600">
-              <CreditCard className="h-3 w-3" /> {c.name}
+              <CreditCardIcon className="h-3 w-3" /> {c.name}
             </span>
           ))}
         </div>

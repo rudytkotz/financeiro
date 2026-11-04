@@ -187,22 +187,34 @@ export default function TransactionModal({
     setServerError('')
     setSubmitting(true)
     const cents = brlToCents(amountDisplay)!
+    const payload: Record<string, unknown> = {
+      date,
+      description: description.trim(),
+      amount: cents,
+      categoryId,
+      dependentId: dependentId || null,
+      accountId: accountId || null,
+      kind,
+      operationType,
+      installmentTotal,
+      paymentMethod,
+    }
+
+    const trimmedTags = tags.trim()
+    const hasExistingMetadata = Boolean(transaction?.tags || transaction?.attachmentUrl || transaction?.attachmentName)
+    const hasNewMetadata = Boolean(trimmedTags || attachmentUrl || attachmentName)
+
+    if (hasExistingMetadata || hasNewMetadata) {
+      payload.tags = trimmedTags || null
+    }
+
+    if (attachmentUrl || attachmentName || transaction?.attachmentUrl || transaction?.attachmentName) {
+      payload.attachmentUrl = attachmentUrl ?? null
+      payload.attachmentName = attachmentName ?? null
+    }
+
     try {
-      await onSubmit({
-        date,
-        description: description.trim(),
-        amount: cents,
-        categoryId,
-        dependentId: dependentId || null,
-        accountId: accountId || null,
-        kind,
-        operationType,
-        installmentTotal,
-        paymentMethod,
-        tags: tags.trim() || null,
-        attachmentUrl,
-        attachmentName,
-      })
+      await onSubmit(payload as Parameters<typeof onSubmit>[0])
       onClose()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro ao salvar transação. Tente novamente.'

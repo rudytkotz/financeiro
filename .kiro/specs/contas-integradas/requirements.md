@@ -125,3 +125,95 @@ O escopo abrange o backend (serviços de agregação em Fastify + Drizzle + Post
 2. WHERE um Cartão não possui `creditLimit` definido, THE Sistema_Contas SHALL indicar a ausência de limite sem exibir percentual de uso para esse Cartão.
 3. THE Sistema_Contas SHALL exibir todos os valores monetários formatados em Real brasileiro (BRL) a partir de valores em centavos.
 4. WHEN uma aba de categoria não possui Contas correspondentes, THE Sistema_Contas SHALL exibir mensagem indicando ausência de Contas naquela categoria.
+
+## Revisão crítica do plano atual
+
+### Falhas e inconsistências identificadas
+
+1. Ambiguidade de domínio entre `Conta_Investimento`, `Investimento_Orfao`, `Conta` e `parentAccountId`.
+   - O requisito trata `Conta_Investimento` e `Conta` como categorias distintas, mas a implementação real usa a mesma tabela `accounts` com `type = 'investimento'` e `parentAccountId` para relacionamento.
+   - O plano precisa deixar explícito que o `type` da conta é a fonte de classificação, e que o vínculo `accountId` do investimento é opcional e não deve ser confundido com status de conta.
+
+2. Regra de cálculo do patrimônio precisa ser mais estrita sobre dupla contagem.
+   - O requisito fala em somar "Em contas" e "Investido" sem dupla contagem, mas não declara claramente que contas do tipo `investimento` devem ser tratadas como contas de custódia e não como caixa disponível.
+   - A regra correta deve ser: `patrimonio = saldo operacional + valor atual dos investimentos (vinculados + órfãos) - valor já embutido em conta de investimento quando a conta funciona como container do patrimônio investido`.
+
+3. O fluxo de cartões precisa separar "uso do cartão" de "conta de cartão".
+   - Em vários pontos do requisito, o termo `Cartao` é usado como conta e como uso, sem indicar claramente que o uso do cartão é a soma de despesas do cartão e não o saldo residual do cartão.
+   - O plano deveria dizer que `cartao` é um tipo de conta e `Uso_Cartao` é um agregado derivado de transações de despesa ligadas a esse cartão.
+
+4. Regras de filtragem sem transações e sem dados precisam ser definidas como estados de UI e de serviço.
+   - Os requisitos exigem zero-state para conta e para categorias, mas não definem o comportamento quando o usuário tem contas sem transação, sem limite, sem investimentos ou sem cartão vinculado.
+   - Isso deve ser tratado como um contrato de UI explícito: `0`, `null`, `—`, `Nenhum dado`, sem ambiguidade visual.
+
+5. O requisito atual não distingue corretamente entre dados persistidos e dados agregados em tempo real.
+   - Há um risco de que a tela calcule totais diferentes do backend se cada camada usar uma regra diferente de exclusão de `deletedAt`, `archived`, `kind`, ou `accountId` nulo.
+   - O contrato precisa especificar obrigatoriamente a fonte de verdade: a resposta agregada do backend é a única responsável pela soma final da tela.
+
+6. Falta uma definição clara do que acontece ao arquivar, desvincular e excluir.
+   - O plano menciona arquivamento e exclusão, mas não define se elementos arquivados continuam no patrimônio, se transações de cartão arquivadas deixam de contar, e como o serviço deve tratar `parentAccountId` ao remover uma conta dona.
+
+### Ajustes de regra de negócio recomendados
+
+- Definir que a classificação de conta é determinística: `type ∈ {corrente, poupanca, carteira, cartao, investimento, outro}`.
+- Definir que `Saldo_Atual` e `Valor_Investido_Atual` são sempre calculados no backend e nunca recalculados na UI sem consenso do serviço.
+- Definir explicitamente que `kind = 'despesa'` soma para uso do cartão e que `amount` positivo = saída, `amount` negativo = entrada, sem exceções.
+- Definir que investimentos órfãos continuam no total investido e no patrimônio, mas não devem ser duplicados ao também aparecerem como conta de custódia vinculada.
+- Definir regras de validação para `parentAccountId`: não pode apontar para a própria conta, precisa pertencer ao mesmo usuário e, se houver vínculo de cartão a conta, o cartão não pode ser `archived` para o cálculo da visibilidade da conta dona.
+- Definir que o estado de `archived` afeta apenas a visibilidade da tela e não a estrutura do cálculo de propriedade ou de vínculo.
+
+### Plano revisado para futuras implementações
+
+#### Fase 1 — Contrato único do resumo financeiro
+- Criar um endpoint ou serviço de agregação centralizado, por exemplo `getAccountsSummary` / `getPortfolioSummary`, que devolva em uma única resposta:
+  - saldo operacional total;
+  - total investido;
+  - patrimônio;
+  - contagem total de contas ativas por tipo;
+  - contagem de investimentos vinculados e órfãos;
+  - contagem de cartões ativos;
+  - uso total do cartão e limites por cartão;
+  - saldo por conta e valor investido por conta.
+- A resposta deve ser a única fonte de verdade usada pela tela de Contas.
+
+#### Fase 2 — Consistência de cálculo e proteção contra duplicidade
+- Implementar a regra de equivalência para cada categoria:
+  - contas operacionais: entram no saldos em contas;
+  - cartões: entram em contagem e uso, mas não em saldo operacional;
+  - contas de investimento: representam custódia, não caixa disponível;
+  - investimentos: entram no total investido e no patrimônio, independentemente de vinculação.
+- Garantir que `deletedAt` e `archived` sejam filtrados antes da agregação.
+- Centralizar o cálculo de patrimônio em uma única função para evitar divergência entre cards e listas.
+
+#### Fase 3 — Vínculo entre conta, cartão e investimento
+- Implementar a criação de cartão direto pela conta dona com `parentAccountId` pré-preenchido.
+- Validar:
+  - `parentAccountId !== id`;
+  - `parentAccountId` pertence ao mesmo usuário;
+  - cartão não pode apontar para conta inválida;
+  - criação e edição devem refletir imediatamente na listagem e nos totais.
+- Implementar o vínculo do investimento a conta sem duplicar o valor no patrimônio.
+
+#### Fase 4 — Frontend com estados explícitos e reatividade
+- Recalcular os cards de resumo em reações a mudanças de conta, cartão, investimento e arquivamento.
+- Exibir:
+  - `0` quando houver dados válidos, mas o valor for zero;
+  - `—` quando não houver limite definido;
+  - mensagem de ausência de contas ou de dados quando a categoria estiver vazia;
+  - destaque visual de patrimônio negativo.
+- Garantir que a tela respeite tabs de visão geral, contas, cartões, investimentos e arquivadas.
+
+#### Fase 5 — Testes e regressão
+- Cobrir cenários de:
+  - investimento órfão;
+  - conta de investimento com ativos vinculados;
+  - cartão com limite e transação de despesa;
+  - usuário sem nenhuma conta;
+  - conta com `parentAccountId` inválido;
+  - patrimônio negativo;
+  - arquivamento e restauração de conta.
+- Exigir que o backend e o frontend usem o mesmo contrato de resposta para a página de Contas.
+
+### Conclusão
+
+O plano atual está bom em termos de motivação e visão de produto, mas ainda precisa ser mais estrito em três pontos: definição de categoria de conta, regra de não dupla contagem e contrato único de agregação. Com esses ajustes, as futuras implementações tornam-se mais previsíveis, menos suscetíveis a regressões e mais fáceis de validar por testes de integração.

@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
-import { listAccounts, createAccount, updateAccount, deleteAccount, getAccountsSummary } from '../services/accountService.js'
+import { listAccounts, createAccount, updateAccount, deleteAccount, getAccountsSummary, getAccountsOverviewSummary } from '../services/accountService.js'
 import { getInvoice } from '../services/invoiceService.js'
 import { getUserId } from '../lib/auth.js'
 import { parse } from '../lib/validation.js'
@@ -13,6 +13,10 @@ const accountRoutes: FastifyPluginAsync = async (app) => {
   // Resumo agregado por conta (saldo + investido + atividade)
   app.get('/api/accounts/summary', async (request, reply) => {
     return reply.send(await getAccountsSummary(getUserId(request)))
+  })
+
+  app.get('/api/accounts/overview', async (request, reply) => {
+    return reply.send(await getAccountsOverviewSummary(getUserId(request)))
   })
 
   app.post('/api/accounts', async (request, reply) => {

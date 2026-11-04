@@ -1,6 +1,6 @@
 import { eq, and, asc } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { investments, investmentTransactions } from '../db/schema.js'
+import { accounts, investments, investmentTransactions } from '../db/schema.js'
 import type { Investment, InvestmentTransaction } from '../db/schema.js'
 import { getQuotes, getGenericQuotes } from './quoteService.js'
 import { getCurrentCdiAnnual, getCdiAccumulatedFactor, getCdiMonthlySeries, getIpcaAccumulated12m, getIbovMonthlySeries } from './rateService.js'
@@ -8,6 +8,27 @@ import { makeError, type ServiceError } from '../lib/errors.js'
 import { assertAccountOwnership } from '../lib/ownership.js'
 
 export type { ServiceError }
+
+export function validateInvestmentAccount(type: string | null | undefined): void {
+  const allowed = ['corrente', 'poupanca', 'carteira', 'outro']
+  if (type && !allowed.includes(type)) {
+    throw makeError(422, 'VALIDATION_ERROR', 'Investimentos só podem ser vinculados a contas operacionais.')
+  }
+}
+
+async function assertInvestmentAccountTarget(accountId: string | null | undefined, userId: string): Promise<void> {
+  if (!accountId) return
+
+  await assertAccountOwnership(accountId, userId)
+
+  const [account] = await db
+    .select({ type: accounts.type })
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), eq(accounts.userId, userId)))
+    .limit(1)
+
+  validateInvestmentAccount(account?.type)
+}
 
 // ---------------------------------------------------------------------------
 // Tipos de posição / resumo (computados)
@@ -106,7 +127,8 @@ export async function createRvInvestment(data: CreateRvData, userId: string): Pr
   const ticker = data.ticker?.trim().toUpperCase() ?? ''
   if (!ticker) throw makeError(422, 'VALIDATION_ERROR', 'O ticker é obrigatório.')
   if (!data.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome é obrigatório.')
-  await assertAccountOwnership(data.accountId, userId)
+
+  await assertInvestmentAccountTarget(data.accountId, userId)
 
   const [created] = await db
     .insert(investments)
@@ -152,7 +174,8 @@ export async function createRfInvestment(data: CreateRfData, userId: string): Pr
   if (!data.investedAmount || data.investedAmount <= 0) throw makeError(422, 'VALIDATION_ERROR', 'O valor aplicado deve ser maior que zero.')
   if (!data.applicationDate) throw makeError(422, 'VALIDATION_ERROR', 'A data de aplicação é obrigatória.')
   if (!data.rateType) throw makeError(422, 'VALIDATION_ERROR', 'O tipo de rentabilidade é obrigatório.')
-  await assertAccountOwnership(data.accountId, userId)
+
+  await assertInvestmentAccountTarget(data.accountId, userId)
 
   const [created] = await db
     .insert(investments)
@@ -218,7 +241,7 @@ export async function updateRvInvestment(id: string, data: UpdateRvData, userId:
   }
   if (data.assetClass !== undefined) updates.assetClass = data.assetClass
   if (data.accountId !== undefined) {
-    await assertAccountOwnership(data.accountId, userId)
+    await assertInvestmentAccountTarget(data.accountId, userId)
     updates.accountId = data.accountId
   }
 
@@ -268,7 +291,7 @@ export async function updateRfInvestment(id: string, data: UpdateRfData, userId:
   if (data.rateType !== undefined) updates.rateType = data.rateType
   if (data.rateValue !== undefined) updates.rateValue = data.rateValue
   if (data.accountId !== undefined) {
-    await assertAccountOwnership(data.accountId, userId)
+    await assertInvestmentAccountTarget(data.accountId, userId)
     updates.accountId = data.accountId
   }
 

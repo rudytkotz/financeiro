@@ -28,6 +28,30 @@ function formatCents(cents: number): string {
   return (cents / 100).toFixed(2).replace('.', ',')
 }
 
+function getErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'Erro ao salvar a conta.'
+
+  const candidate = error as {
+    response?: { data?: { message?: string | { message?: string } } }
+    data?: { message?: string | { message?: string } }
+    message?: string | { message?: string }
+  }
+
+  const responseMessage = candidate.response?.data?.message
+  if (typeof responseMessage === 'string' && responseMessage.trim()) return responseMessage
+  if (responseMessage && typeof responseMessage === 'object' && typeof responseMessage.message === 'string' && responseMessage.message.trim()) return responseMessage.message
+
+  const directMessage = candidate.data?.message
+  if (typeof directMessage === 'string' && directMessage.trim()) return directMessage
+  if (directMessage && typeof directMessage === 'object' && typeof directMessage.message === 'string' && directMessage.message.trim()) return directMessage.message
+
+  const errorMessage = candidate.message
+  if (typeof errorMessage === 'string' && errorMessage.trim()) return errorMessage
+  if (errorMessage && typeof errorMessage === 'object' && typeof errorMessage.message === 'string' && errorMessage.message.trim()) return errorMessage.message
+
+  return 'Erro ao salvar a conta.'
+}
+
 export interface AccountModalProps {
   /** null = criar; Account = editar */
   account: Account | null
@@ -80,6 +104,11 @@ export default function AccountModal({ account, defaultParentAccountId = null, o
 
   async function handleSave() {
     if (!name.trim()) { setError('Informe o nome da conta.'); return }
+    if (isCard && account && parentAccountId && parentAccountId === account.id) {
+      setError('Uma conta não pode ser vinculada a si mesma.')
+      return
+    }
+
     try {
       await onSubmit({
         name: name.trim(),
@@ -93,8 +122,8 @@ export default function AccountModal({ account, defaultParentAccountId = null, o
         dependentId: dependentId || null,
       })
       onClose()
-    } catch {
-      setError('Erro ao salvar a conta.')
+    } catch (error: unknown) {
+      setError(getErrorMessage(error))
     }
   }
 

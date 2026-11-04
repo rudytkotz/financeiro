@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import { CreditCard, Wallet } from 'lucide-react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import AccountsPage from './AccountsPage'
@@ -95,6 +96,7 @@ vi.mock('@/hooks/useAccounts', () => ({
     isLoading: false,
   }),
   useAccountsSummary: () => ({ data: summaryList }),
+  useAccountsOverview: () => ({ data: undefined }),
 }))
 
 vi.mock('@/hooks/useDependents', () => ({
@@ -119,12 +121,12 @@ vi.mock('@/hooks/useInvestments', () => ({
 vi.mock('@/components/AccountModal', () => ({
   default: () => null,
   ACCOUNT_TYPES: [
-    { value: 'corrente', label: 'Conta corrente', icon: 'Wallet' },
-    { value: 'poupanca', label: 'Poupança', icon: 'PiggyBank' },
-    { value: 'carteira', label: 'Carteira', icon: 'Wallet' },
-    { value: 'cartao', label: 'Cartão', icon: 'CreditCard' },
-    { value: 'investimento', label: 'Investimento', icon: 'TrendingUp' },
-    { value: 'outro', label: 'Outro', icon: 'Banknote' },
+    { value: 'corrente', label: 'Conta corrente', icon: Wallet },
+    { value: 'poupanca', label: 'Poupança', icon: Wallet },
+    { value: 'carteira', label: 'Carteira', icon: Wallet },
+    { value: 'cartao', label: 'Cartão', icon: CreditCard },
+    { value: 'investimento', label: 'Investimento', icon: Wallet },
+    { value: 'outro', label: 'Outro', icon: Wallet },
   ],
 }))
 
@@ -132,6 +134,22 @@ vi.mock('@/components/TransferModal', () => ({ default: () => null }))
 vi.mock('@/components/ConfirmDialog', () => ({ default: () => null }))
 
 describe('AccountsPage', () => {
+  it('não dispara warnings de casing em ícones do React', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter>
+        <AccountsPage />
+      </MemoryRouter>,
+    )
+
+    const warnings = errorSpy.mock.calls.flat().join(' ')
+    expect(warnings).not.toContain('using incorrect casing')
+    expect(warnings).not.toContain('unrecognized in this browser')
+
+    errorSpy.mockRestore()
+  })
+
   it('soma o saldo em contas com o total investido no patrimônio', () => {
     render(
       <MemoryRouter>

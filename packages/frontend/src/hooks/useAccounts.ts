@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import type { Account, CreateAccountPayload } from '@financeiro/shared'
+import type { Account, CreateAccountPayload, AccountsOverviewSummary } from '@financeiro/shared'
 
 export function useAccounts() {
   return useQuery<Account[]>({
@@ -22,6 +22,16 @@ export function useAccountsSummary() {
   })
 }
 
+export function useAccountsOverview() {
+  return useQuery<AccountsOverviewSummary>({
+    queryKey: ['accounts', 'overview'],
+    queryFn: async () => {
+      const { data } = await api.get('/api/accounts/overview')
+      return data
+    },
+  })
+}
+
 export function useInvoice(accountId: string | null, month: string) {
   return useQuery<import('@financeiro/shared').InvoiceSummary>({
     queryKey: ['invoice', accountId, month],
@@ -35,7 +45,10 @@ export function useInvoice(accountId: string | null, month: string) {
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['accounts'] })
+  qc.invalidateQueries({ queryKey: ['accounts', 'summary'] })
+  qc.invalidateQueries({ queryKey: ['accounts', 'overview'] })
   qc.invalidateQueries({ queryKey: ['transactions'] })
+  qc.invalidateQueries({ queryKey: ['investments', 'summary'] })
 }
 
 export function useCreateAccount() {
