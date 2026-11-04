@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { buildAccountsOverviewSummary, validateAccountParentLink } from './accountService'
+import { buildAccountsOverviewSummary, normalizeAccountParentLink, validateAccountParentLink } from './accountService'
 
 describe('validateAccountParentLink', () => {
   it('rejects parent links for non-card accounts and self-references', () => {
     expect(() => validateAccountParentLink('corrente', 'account-1')).toThrow('Cartões só podem ter conta pai.')
     expect(() => validateAccountParentLink('cartao', 'account-1', 'account-1')).toThrow('Uma conta não pode ser vinculada a si mesma.')
+  })
+
+  it('clears stale parent links when an account stops being a card', () => {
+    expect(normalizeAccountParentLink('corrente', 'account-1')).toBeNull()
+    expect(normalizeAccountParentLink('cartao', 'account-1')).toBe('account-1')
+  })
+
+  it('keeps card parent links only for card accounts', () => {
+    expect(normalizeAccountParentLink('investimento', 'account-1')).toBeNull()
+    expect(normalizeAccountParentLink(undefined, 'account-1')).toBeNull()
   })
 })
 

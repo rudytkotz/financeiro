@@ -156,7 +156,15 @@ export default function AccountModal({ account, defaultParentAccountId = null, o
                 const Icon = t.icon
                 const active = type === t.value
                 return (
-                  <button key={t.value} type="button" onClick={() => setType(t.value)}
+                  <button key={t.value} type="button" onClick={() => {
+                    setType(t.value)
+                    if (t.value !== 'cartao') {
+                      setParentAccountId('')
+                      setClosingDay('')
+                      setDueDay('')
+                      setCreditLimit('')
+                    }
+                  }}
                     className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2.5 text-[11px] font-medium transition ${active ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                     <Icon className="h-4 w-4" />
                     <span className="text-center leading-tight">{t.label}</span>
@@ -223,8 +231,8 @@ export default function AccountModal({ account, defaultParentAccountId = null, o
               </div>
               {/* Conta vinculada ao cartão (ex: cartão do Nubank → conta Nubank) */}
               <div className="col-span-3">
-                <label className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Vinculado à conta</label>
-                <select value={parentAccountId} onChange={(e) => setParentAccountId(e.target.value)}
+                <label htmlFor="parent-account-select" className="mb-1 block text-[10px] font-semibold uppercase text-gray-400">Vinculado à conta</label>
+                <select id="parent-account-select" value={parentAccountId} onChange={(e) => setParentAccountId(e.target.value)}
                   className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30">
                   <option value="">Nenhuma (cartão independente)</option>
                   {accounts

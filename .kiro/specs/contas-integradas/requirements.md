@@ -1,219 +1,82 @@
-# Requirements Document
+# Requisitos finais — contas integradas
 
-## Introduction
+## Estado atual do produto
 
-A tela de **Contas** do aplicativo de controle financeiro pessoal reúne, em abas (Visão geral, Contas, Cartões, Investimentos, Arquivadas), todas as fontes de valor do usuário: contas correntes/poupança/carteira, cartões de crédito e investimentos. Hoje a tela está confusa e com cálculos incorretos: o card de Patrimônio aparece zerado, o saldo "Em contas" não reflete as transações, o total "Investido" ignora investimentos sem conta vinculada, o card de Cartões não reflete o uso real dos cartões, e não há um fluxo claro para cadastrar/vincular um cartão dentro da própria conta dona dele.
+A implementação principal de contas, cartões e investimentos já está estabilizada e validada. A regra de negócio central é simples e precisa:
 
-Esta reformulação tem como objetivo tornar a tela **integrada e coerente**: contas, cartões e investimentos devem "conversar" entre si, com cálculos corretos de patrimônio, saldo disponível, total investido e uso de cartões, além de um fluxo direto para vincular cartões a contas.
+- o backend é a fonte de verdade para todos os agregados financeiros;
+- a UI consome o contrato de resumo do backend em vez de recalcular valores localmente;
+- contas operacionais entram em "Em contas";
+- cartões entram em contagem e uso, mas não no saldo operacional;
+- investimentos entram no total investido e no patrimônio sem duplicar valores;
+- transações com `deletedAt` preenchido e contas arquivadas não participam dos totais ativos.
 
-O escopo abrange o backend (serviços de agregação em Fastify + Drizzle + Postgres) e o frontend (tela de Contas). Não inclui mudança do modelo de sinais de `amount` das transações, que permanece: `amount` positivo = despesa (saída), `amount` negativo = receita (entrada).
+## Glossário final
 
-## Glossary
+- Conta operacional: `type` em `{corrente, poupanca, carteira, outro}`
+- Cartão: `type = 'cartao'`, com `closingDay`, `dueDay`, `creditLimit` e `parentAccountId`
+- Conta de investimento: `type = 'investimento'`, usada como custódia, não como caixa disponível
+- Investimento órfão: investimento sem `accountId`
+- Uso do cartão: soma de despesas (`kind = 'despesa'`) ligadas ao cartão
+- Patrimônio: saldo operacional + valor investido atual dos investimentos, sem dupla contagem
 
-- **Conta**: Registro da tabela `accounts` representando onde o dinheiro está. Possui `type` ∈ {corrente, poupanca, carteira, cartao, investimento, outro}, `initialBalance` (centavos), `parentAccountId` (auto-referência) e `dependentId`.
-- **Conta_Operacional**: Conta cujo `type` ∈ {corrente, poupanca, carteira, outro}. Entra no cálculo de "Em contas".
-- **Cartao**: Conta cujo `type` = 'cartao'. Possui `closingDay`, `dueDay`, `creditLimit` e, opcionalmente, `parentAccountId` apontando para a Conta dona.
-- **Conta_Investimento**: Conta cujo `type` = 'investimento'.
-- **Investimento**: Registro da tabela `investments` (renda fixa ou renda variável), com `accountId` opcional indicando a Conta/corretora de custódia.
-- **Investimento_Orfao**: Investimento cujo `accountId` é nulo (não vinculado a nenhuma Conta).
-- **Transacao**: Registro da tabela `transactions`, com `amount` em centavos (positivo = despesa, negativo = receita), `accountId`, `kind` e `paymentMethod`. Transações com `deletedAt` preenchido estão na lixeira e são desconsideradas.
-- **Saldo_Atual**: Saldo calculado de uma Conta = `initialBalance` − soma de `amount` das Transações ativas vinculadas.
-- **Valor_Investido_Atual**: Valor atual dos Investimentos: renda variável a preço de mercado (via posições) e renda fixa pelo valor aplicado (`investedAmount`).
-- **Patrimonio**: Soma do Saldo_Atual das Contas_Operacionais com o Valor_Investido_Atual de todos os Investimentos (vinculados e órfãos), sem dupla contagem.
-- **Uso_Cartao**: Soma das despesas (kind = 'despesa') vinculadas a um Cartão.
-- **Sistema_Contas**: Conjunto de serviços de backend e componentes de frontend responsáveis pela tela de Contas.
-- **Servico_Resumo**: Serviço de backend que calcula os agregados por conta e os totais da tela (`getAccountsSummary` e correlatos).
+## Regras de negócio vigentes
 
-## Requirements
+### 1. Resumo financeiro
 
-### Requirement 1: Cálculo correto do saldo em contas
+- `getAccountsSummary` e equivalentes devem calcular o saldo por conta, a contagem por tipo e os totais de tela.
+- O total "Em contas" considera apenas contas operacionais não arquivadas.
+- O total "Investido" inclui investimentos vinculados e órfãos.
+- O patrimônio é calculado a partir do saldo operacional e do valor investido, sem duplicar contas de custódia.
 
-**User Story:** Como usuário, quero que o card "Em contas" mostre o saldo real disponível somando o saldo das minhas contas operacionais, para que eu confie no valor exibido.
+### 2. Cartões
 
-#### Acceptance Criteria
+- Cartões não entram no saldo operacional.
+- O uso do cartão é a soma das despesas em transações ativas ligadas ao cartão.
+- `parentAccountId` só faz sentido para conta do tipo cartão.
+- Se o tipo deixa de ser cartão, o vínculo deve ser limpo imediatamente.
 
-1. THE Servico_Resumo SHALL calcular o Saldo_Atual de cada Conta como `initialBalance` menos a soma de `amount` das Transações ativas vinculadas à Conta.
-2. WHEN o Servico_Resumo calcula o saldo das contas, THE Servico_Resumo SHALL desconsiderar Transações cujo `deletedAt` esteja preenchido.
-3. THE Servico_Resumo SHALL calcular o total "Em contas" como a soma do Saldo_Atual de todas as Contas_Operacionais não arquivadas.
-4. WHEN existe ao menos uma Conta_Operacional não arquivada com Transações vinculadas, THE Sistema_Contas SHALL exibir no card "Em contas" o total "Em contas" calculado.
-5. THE Sistema_Contas SHALL excluir Cartões e Contas_Investimento do total "Em contas".
-6. IF não existe nenhuma Conta_Operacional não arquivada com Transações vinculadas, THEN THE Sistema_Contas SHALL exibir o card "Em contas" com o valor R$ 0,00.
+### 3. Investimentos
 
-### Requirement 2: Cálculo correto do total investido
+- Investimentos podem estar vinculados a contas ou órfãos.
+- Investimentos órfãos continuam participando do total investido e do patrimônio.
+- Vinculação inválida deve ser rejeitada no backend.
 
-**User Story:** Como usuário, quero que o card "Investido" some todos os meus investimentos cadastrados, para que o valor reflita a realidade mesmo quando o investimento não está vinculado a uma conta.
+### 4. Validação
 
-#### Acceptance Criteria
+- `parentAccountId !== id` deve ser rejeitado.
+- `parentAccountId` deve pertencer ao mesmo usuário.
+- `deletedAt` deve ser ignorado na agregação.
+- `archived` afeta visibilidade e listagem ativa, mas não deve quebrar o contrato de resumo.
 
-1. THE Servico_Resumo SHALL calcular o Valor_Investido_Atual de renda fixa como a soma de `investedAmount` dos Investimentos de renda fixa do usuário.
-2. THE Servico_Resumo SHALL calcular o Valor_Investido_Atual de renda variável como a soma do valor de mercado das posições com quantidade maior que zero.
-3. THE Servico_Resumo SHALL incluir Investimentos_Orfaos no cálculo do total investido.
-4. WHEN existe ao menos um Investimento cadastrado com valor maior que zero, THE Sistema_Contas SHALL exibir no card "Investido" o total investido calculado.
-5. THE Sistema_Contas SHALL exibir, no card "Investido", a quantidade de Investimentos vinculados a Contas e a quantidade de Investimentos_Orfaos.
+## Implementado e validado
 
-### Requirement 3: Cálculo correto do patrimônio
+- resumo centralizado no backend;
+- regras de semântica entre contas, cartões e investimentos;
+- cálculo de total investido e patrimônio sem dupla contagem;
+- validação de vinculação de cartão e investimento;
+- invalidation correta de queries no frontend;
+- regressões protegidas por testes de backend e frontend.
 
-**User Story:** Como usuário, quero que o card "Patrimônio" some meu dinheiro em contas com meus investimentos, para que eu veja meu total consolidado sem valores duplicados.
+## Próximas melhorias aceitáveis
 
-#### Acceptance Criteria
+### Fase A — hardening de produto
+- definir regra explícita de arquivamento e restauração;
+- padronizar zero-state, mensagens e blocos vazios;
+- revisar UX de cartões sem limite e investimentos órfãos.
 
-1. THE Servico_Resumo SHALL calcular o Patrimonio como a soma do total "Em contas" com o total investido de todos os Investimentos.
-2. THE Servico_Resumo SHALL incluir o Valor_Investido_Atual dos Investimentos_Orfaos no Patrimonio.
-3. THE Servico_Resumo SHALL contar o valor de cada Investimento uma única vez no Patrimonio.
-4. WHEN uma Conta_Investimento possui Investimentos vinculados, THE Servico_Resumo SHALL representar o valor dessa Conta_Investimento pelo Valor_Investido_Atual dos Investimentos vinculados em vez do saldo manual, evitando dupla contagem.
-5. WHEN existe ao menos uma Conta ou um Investimento com valor maior que zero, THE Sistema_Contas SHALL exibir no card "Patrimônio" o valor calculado do Patrimonio.
-6. IF o Patrimonio calculado for negativo, THEN THE Sistema_Contas SHALL exibir o valor do Patrimônio com destaque visual de valor negativo.
+### Fase B — expansão do sistema
+- orçamento e limites por categoria;
+- dashboard de cartão por mês;
+- metas, previsões e alertas financeiros.
 
-### Requirement 4: Resumo correto de cartões
+## Critério de pronto para a próxima etapa
 
-**User Story:** Como usuário, quero que o card "Cartões" reflita meus cartões e seu uso real, para que eu entenda quanto estou comprometendo mesmo quando há transações de crédito ou débito registradas.
+A próxima etapa pode começar quando:
 
-#### Acceptance Criteria
+- o fluxo de contas/cartões/investimentos estiver estável;
+- os casos de edge relevantes estiverem cobertos por testes;
+- a UX de estado vazio/arquivamento estiver consolidada;
+- o contrato do backend continuar sendo a única fonte de verdade para a tela.
 
-1. THE Servico_Resumo SHALL calcular o Uso_Cartao de cada Cartão como a soma de `amount` das Transações ativas com `kind` = 'despesa' vinculadas ao Cartão.
-2. THE Sistema_Contas SHALL exibir no card "Cartões" a quantidade de Cartões não arquivados.
-3. WHEN ao menos um Cartão possui `creditLimit` definido, THE Sistema_Contas SHALL exibir a soma dos limites dos Cartões no card "Cartões".
-4. WHEN existe ao menos um Cartão com Transações de despesa vinculadas, THE Sistema_Contas SHALL exibir no card "Cartões" o Uso_Cartao total dos Cartões.
-5. WHERE um Cartão possui `creditLimit` maior que zero, THE Sistema_Contas SHALL exibir o percentual de uso do limite desse Cartão como `Uso_Cartao` dividido pelo `creditLimit`.
-6. IF uma Transação de crédito ou débito existe sem `accountId` vinculado a um Cartão, THEN THE Sistema_Contas SHALL desconsiderar essa Transação do Uso_Cartao dos Cartões, mantendo-a contabilizada nos demais resumos (como o total "Em contas" quando vinculada a uma Conta_Operacional).
-
-### Requirement 5: Vincular cartão a uma conta a partir da própria conta
-
-**User Story:** Como usuário, quero cadastrar e vincular um cartão dentro da própria conta (ex: adicionar o cartão da conta RICO a partir da conta RICO), para que o vínculo seja claro e direto.
-
-#### Acceptance Criteria
-
-1. WHERE uma Conta não é um Cartão e não está arquivada, THE Sistema_Contas SHALL exibir no card da Conta uma ação para adicionar um Cartão vinculado a essa Conta.
-2. WHEN o usuário aciona a ação de adicionar Cartão a partir de uma Conta, THE Sistema_Contas SHALL abrir o formulário de criação de Cartão com o `parentAccountId` pré-preenchido com o identificador dessa Conta e com o campo editável para que o usuário possa trocar a Conta dona.
-3. WHEN o usuário confirma a criação de um Cartão vinculado, THE Servico_Resumo SHALL persistir o Cartão com `parentAccountId` apontando para a Conta dona.
-4. IF o usuário tenta vincular uma Conta a si mesma como `parentAccountId`, THEN THE Servico_Resumo SHALL rejeitar a operação com mensagem de validação.
-5. IF o usuário informa um `parentAccountId` que não pertence ao usuário, THEN THE Servico_Resumo SHALL rejeitar a operação com erro de validação.
-6. THE Sistema_Contas SHALL exibir, no card de cada Conta, os Cartões vinculados a ela.
-7. THE Sistema_Contas SHALL exibir, no card de cada Cartão vinculado, o nome da Conta dona do Cartão.
-
-### Requirement 6: Vincular investimentos a contas na tela
-
-**User Story:** Como usuário, quero vincular um investimento a uma conta/corretora e visualizar investimentos ainda não vinculados, para que meus investimentos conversem com minhas contas.
-
-#### Acceptance Criteria
-
-1. THE Sistema_Contas SHALL exibir, no card de cada Conta, o Valor_Investido_Atual e a quantidade de Investimentos vinculados a essa Conta.
-2. WHERE existem Investimentos_Orfaos, THE Sistema_Contas SHALL exibir uma seção identificando os Investimentos não vinculados a nenhuma Conta.
-3. WHEN o usuário vincula um Investimento_Orfao a uma Conta, THE Servico_Resumo SHALL atualizar o `accountId` do Investimento para a Conta escolhida.
-4. IF o usuário tenta vincular um Investimento a uma Conta que não pertence ao usuário, THEN THE Servico_Resumo SHALL rejeitar a operação com erro de validação.
-5. WHEN um Investimento passa a ser vinculado a uma Conta, THE Sistema_Contas SHALL atualizar imediatamente o Valor_Investido_Atual exibido no card da Conta, de forma síncrona com a confirmação do vínculo.
-
-### Requirement 7: Integração e consistência da tela
-
-**User Story:** Como usuário, quero que os totais da tela sempre batam entre si e com os cards individuais, para que a tela faça sentido como um todo.
-
-#### Acceptance Criteria
-
-1. THE Servico_Resumo SHALL fornecer, em uma única resposta de resumo, o Saldo_Atual, o Valor_Investido_Atual, a contagem de Investimentos e a contagem de Cartões vinculados por Conta.
-2. THE Sistema_Contas SHALL calcular o Patrimonio exibido como a soma consistente do total "Em contas" e do total "Investido" exibidos na mesma tela.
-3. WHEN o usuário cria, edita, arquiva ou exclui uma Conta, THE Sistema_Contas SHALL recalcular e reexibir os totais de Patrimônio, "Em contas", "Investido" e "Cartões".
-4. WHEN o usuário vincula um Cartão ou um Investimento a uma Conta, THE Sistema_Contas SHALL recalcular e reexibir todos os totais da tela (Patrimônio, "Em contas", "Investido" e "Cartões"), e não apenas os agregados diretamente afetados.
-5. THE Servico_Resumo SHALL considerar apenas Contas, Cartões, Investimentos e Transações pertencentes ao usuário autenticado.
-
-### Requirement 8: Estados sem dados e consistência de exibição
-
-**User Story:** Como usuário, quero que a tela trate corretamente os casos sem dados e exiba valores monetários de forma consistente, para que eu não veja informações enganosas.
-
-#### Acceptance Criteria
-
-1. IF o usuário não possui nenhuma Conta cadastrada, THEN THE Sistema_Contas SHALL exibir um estado vazio com ação para criar a primeira Conta.
-2. WHERE um Cartão não possui `creditLimit` definido, THE Sistema_Contas SHALL indicar a ausência de limite sem exibir percentual de uso para esse Cartão.
-3. THE Sistema_Contas SHALL exibir todos os valores monetários formatados em Real brasileiro (BRL) a partir de valores em centavos.
-4. WHEN uma aba de categoria não possui Contas correspondentes, THE Sistema_Contas SHALL exibir mensagem indicando ausência de Contas naquela categoria.
-
-## Revisão crítica do plano atual
-
-### Falhas e inconsistências identificadas
-
-1. Ambiguidade de domínio entre `Conta_Investimento`, `Investimento_Orfao`, `Conta` e `parentAccountId`.
-   - O requisito trata `Conta_Investimento` e `Conta` como categorias distintas, mas a implementação real usa a mesma tabela `accounts` com `type = 'investimento'` e `parentAccountId` para relacionamento.
-   - O plano precisa deixar explícito que o `type` da conta é a fonte de classificação, e que o vínculo `accountId` do investimento é opcional e não deve ser confundido com status de conta.
-
-2. Regra de cálculo do patrimônio precisa ser mais estrita sobre dupla contagem.
-   - O requisito fala em somar "Em contas" e "Investido" sem dupla contagem, mas não declara claramente que contas do tipo `investimento` devem ser tratadas como contas de custódia e não como caixa disponível.
-   - A regra correta deve ser: `patrimonio = saldo operacional + valor atual dos investimentos (vinculados + órfãos) - valor já embutido em conta de investimento quando a conta funciona como container do patrimônio investido`.
-
-3. O fluxo de cartões precisa separar "uso do cartão" de "conta de cartão".
-   - Em vários pontos do requisito, o termo `Cartao` é usado como conta e como uso, sem indicar claramente que o uso do cartão é a soma de despesas do cartão e não o saldo residual do cartão.
-   - O plano deveria dizer que `cartao` é um tipo de conta e `Uso_Cartao` é um agregado derivado de transações de despesa ligadas a esse cartão.
-
-4. Regras de filtragem sem transações e sem dados precisam ser definidas como estados de UI e de serviço.
-   - Os requisitos exigem zero-state para conta e para categorias, mas não definem o comportamento quando o usuário tem contas sem transação, sem limite, sem investimentos ou sem cartão vinculado.
-   - Isso deve ser tratado como um contrato de UI explícito: `0`, `null`, `—`, `Nenhum dado`, sem ambiguidade visual.
-
-5. O requisito atual não distingue corretamente entre dados persistidos e dados agregados em tempo real.
-   - Há um risco de que a tela calcule totais diferentes do backend se cada camada usar uma regra diferente de exclusão de `deletedAt`, `archived`, `kind`, ou `accountId` nulo.
-   - O contrato precisa especificar obrigatoriamente a fonte de verdade: a resposta agregada do backend é a única responsável pela soma final da tela.
-
-6. Falta uma definição clara do que acontece ao arquivar, desvincular e excluir.
-   - O plano menciona arquivamento e exclusão, mas não define se elementos arquivados continuam no patrimônio, se transações de cartão arquivadas deixam de contar, e como o serviço deve tratar `parentAccountId` ao remover uma conta dona.
-
-### Ajustes de regra de negócio recomendados
-
-- Definir que a classificação de conta é determinística: `type ∈ {corrente, poupanca, carteira, cartao, investimento, outro}`.
-- Definir que `Saldo_Atual` e `Valor_Investido_Atual` são sempre calculados no backend e nunca recalculados na UI sem consenso do serviço.
-- Definir explicitamente que `kind = 'despesa'` soma para uso do cartão e que `amount` positivo = saída, `amount` negativo = entrada, sem exceções.
-- Definir que investimentos órfãos continuam no total investido e no patrimônio, mas não devem ser duplicados ao também aparecerem como conta de custódia vinculada.
-- Definir regras de validação para `parentAccountId`: não pode apontar para a própria conta, precisa pertencer ao mesmo usuário e, se houver vínculo de cartão a conta, o cartão não pode ser `archived` para o cálculo da visibilidade da conta dona.
-- Definir que o estado de `archived` afeta apenas a visibilidade da tela e não a estrutura do cálculo de propriedade ou de vínculo.
-
-### Plano revisado para futuras implementações
-
-#### Fase 1 — Contrato único do resumo financeiro
-- Criar um endpoint ou serviço de agregação centralizado, por exemplo `getAccountsSummary` / `getPortfolioSummary`, que devolva em uma única resposta:
-  - saldo operacional total;
-  - total investido;
-  - patrimônio;
-  - contagem total de contas ativas por tipo;
-  - contagem de investimentos vinculados e órfãos;
-  - contagem de cartões ativos;
-  - uso total do cartão e limites por cartão;
-  - saldo por conta e valor investido por conta.
-- A resposta deve ser a única fonte de verdade usada pela tela de Contas.
-
-#### Fase 2 — Consistência de cálculo e proteção contra duplicidade
-- Implementar a regra de equivalência para cada categoria:
-  - contas operacionais: entram no saldos em contas;
-  - cartões: entram em contagem e uso, mas não em saldo operacional;
-  - contas de investimento: representam custódia, não caixa disponível;
-  - investimentos: entram no total investido e no patrimônio, independentemente de vinculação.
-- Garantir que `deletedAt` e `archived` sejam filtrados antes da agregação.
-- Centralizar o cálculo de patrimônio em uma única função para evitar divergência entre cards e listas.
-
-#### Fase 3 — Vínculo entre conta, cartão e investimento
-- Implementar a criação de cartão direto pela conta dona com `parentAccountId` pré-preenchido.
-- Validar:
-  - `parentAccountId !== id`;
-  - `parentAccountId` pertence ao mesmo usuário;
-  - cartão não pode apontar para conta inválida;
-  - criação e edição devem refletir imediatamente na listagem e nos totais.
-- Implementar o vínculo do investimento a conta sem duplicar o valor no patrimônio.
-
-#### Fase 4 — Frontend com estados explícitos e reatividade
-- Recalcular os cards de resumo em reações a mudanças de conta, cartão, investimento e arquivamento.
-- Exibir:
-  - `0` quando houver dados válidos, mas o valor for zero;
-  - `—` quando não houver limite definido;
-  - mensagem de ausência de contas ou de dados quando a categoria estiver vazia;
-  - destaque visual de patrimônio negativo.
-- Garantir que a tela respeite tabs de visão geral, contas, cartões, investimentos e arquivadas.
-
-#### Fase 5 — Testes e regressão
-- Cobrir cenários de:
-  - investimento órfão;
-  - conta de investimento com ativos vinculados;
-  - cartão com limite e transação de despesa;
-  - usuário sem nenhuma conta;
-  - conta com `parentAccountId` inválido;
-  - patrimônio negativo;
-  - arquivamento e restauração de conta.
-- Exigir que o backend e o frontend usem o mesmo contrato de resposta para a página de Contas.
-
-### Conclusão
-
-O plano atual está bom em termos de motivação e visão de produto, mas ainda precisa ser mais estrito em três pontos: definição de categoria de conta, regra de não dupla contagem e contrato único de agregação. Com esses ajustes, as futuras implementações tornam-se mais previsíveis, menos suscetíveis a regressões e mais fáceis de validar por testes de integração.
+Este é o estado final de referência do módulo de contas integradas: funcional, consistente, validado e pronto para evolução incremental sem reescrita de arquitetura.

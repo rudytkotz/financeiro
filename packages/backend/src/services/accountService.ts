@@ -132,6 +132,14 @@ export function validateAccountParentLink(
   }
 }
 
+export function normalizeAccountParentLink(
+  type: string | undefined,
+  parentAccountId: string | null | undefined,
+): string | null {
+  if (!type || type !== 'cartao') return null
+  return parentAccountId ?? null
+}
+
 function validate(data: CreateAccountData | UpdateAccountData, currentType?: string, currentAccountId?: string) {
   if ('name' in data && data.name !== undefined && !data.name.trim()) {
     throw makeError(422, 'VALIDATION_ERROR', 'O nome da conta é obrigatório.')
@@ -208,7 +216,7 @@ export async function listAccounts(userId: string): Promise<AccountWithBalance[]
       total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(eq(transactions.userId, userId))
+    .where(and(eq(transactions.userId, userId), sql`${transactions.deletedAt} IS NULL`))
     .groupBy(transactions.accountId)
 
   const sumByAccount = new Map(sums.map((s) => [s.accountId, Number(s.total)]))
@@ -371,25 +379,28 @@ export async function getAccountsOverviewSummary(userId: string): Promise<Accoun
 }
 
 export async function createAccount(data: CreateAccountData, userId: string): Promise<Account> {
-  validate(data, data.type)
-  if (!data.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome da conta é obrigatório.')
+  const normalizedParentAccountId = normalizeAccountParentLink(data.type, data.parentAccountId)
+  const safeData = { ...data, parentAccountId: normalizedParentAccountId }
+
+  validate(safeData, safeData.type)
+  if (!safeData.name?.trim()) throw makeError(422, 'VALIDATION_ERROR', 'O nome da conta é obrigatório.')
 
   // Garante que a conta-pai e o dependente informados são do próprio usuário
-  await assertAccountOwnership(data.parentAccountId, userId)
-  await assertDependentOwnership(data.dependentId, userId)
+  await assertAccountOwnership(safeData.parentAccountId, userId)
+  await assertDependentOwnership(safeData.dependentId, userId)
 
   const [created] = await db
     .insert(accounts)
     .values({
-      name: data.name.trim(),
-      type: data.type ?? 'corrente',
-      initialBalance: data.initialBalance ?? 0,
-      color: data.color ?? null,
-      closingDay: data.closingDay ?? null,
-      dueDay: data.dueDay ?? null,
-      creditLimit: data.creditLimit ?? null,
-      parentAccountId: data.parentAccountId ?? null,
-      dependentId: data.dependentId ?? null,
+      name: safeData.name.trim(),
+      type: safeData.type ?? 'corrente',
+      initialBalance: safeData.initialBalance ?? 0,
+      color: safeData.color ?? null,
+      closingDay: safeData.closingDay ?? null,
+      dueDay: safeData.dueDay ?? null,
+      creditLimit: safeData.creditLimit ?? null,
+      parentAccountId: safeData.parentAccountId ?? null,
+      dependentId: safeData.dependentId ?? null,
       userId,
     })
     .returning()
@@ -405,7 +416,11 @@ export async function updateAccount(id: string, data: UpdateAccountData, userId:
     .limit(1)
   if (!existing) throw makeError(404, 'NOT_FOUND', 'Conta não encontrada.')
 
-  validate(data, existing.type, id)
+  const effectiveType = data.type ?? existing.type
+  const normalizedParentAccountId = normalizeAccountParentLink(effectiveType, data.parentAccountId ?? existing.parentAccountId)
+  const safeData = { ...data, type: effectiveType, parentAccountId: normalizedParentAccountId }
+
+  validate(safeData, existing.type, id)
 
   const updates: Record<string, unknown> = {}
   if (data.name !== undefined) updates.name = data.name.trim()
@@ -415,9 +430,13 @@ export async function updateAccount(id: string, data: UpdateAccountData, userId:
   if (data.closingDay !== undefined) updates.closingDay = data.closingDay
   if (data.dueDay !== undefined) updates.dueDay = data.dueDay
   if (data.creditLimit !== undefined) updates.creditLimit = data.creditLimit
-  if (data.parentAccountId !== undefined) {
-    await assertAccountOwnership(data.parentAccountId, userId)
-    updates.parentAccountId = data.parentAccountId
+  if (effectiveType !== 'cartao') {
+    updates.parentAccountId = null
+  }
+
+  if (data.parentAccountId !== undefined || (data.type !== undefined && data.type === 'cartao')) {
+    await assertAccountOwnership(safeData.parentAccountId, userId)
+    updates.parentAccountId = safeData.parentAccountId
   }
   if (data.dependentId !== undefined) {
     await assertDependentOwnership(data.dependentId, userId)
