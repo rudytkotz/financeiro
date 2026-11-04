@@ -8,6 +8,7 @@ import {
   resolvePortadorToDependents,
   insertStandaloneTransactions,
   filterDuplicateInstallments,
+  filterExistingTransactions,
   suggestCategories,
   type ImportTransaction,
 } from '../services/importService.js'
@@ -16,7 +17,7 @@ import { getUserId } from '../lib/auth.js'
 // ---------------------------------------------------------------------------
 // JSON Schema for POST /api/imports body validation
 // ---------------------------------------------------------------------------
-const postImportsSchema = {
+export const postImportsSchema = {
   body: {
     type: 'object',
     required: ['transactions'],
@@ -31,11 +32,13 @@ const postImportsSchema = {
             date: { type: 'string' },
             description: { type: 'string' },
             amount: { type: 'number' },
-            categoryId: { type: 'string' },
+            categoryId: { type: ['string', 'null'] },
             dependentId: { type: ['string', 'null'] },
             portador: { type: ['string', 'null'] },
             installmentCurrent: { type: ['number', 'null'] },
             installmentTotal: { type: ['number', 'null'] },
+            source: { type: ['string', 'null'] },
+            importId: { type: ['string', 'null'] },
           },
         },
       },
@@ -81,8 +84,8 @@ interface ValidationError {
  * Revalida transações server-side.
  * Retorna as transações válidas e a lista de erros de validação.
  */
-function validateTransactions(
-  items: Array<{ date: string; description: string; amount: number; categoryId: string; dependentId?: string | null }>
+export function validateTransactions(
+  items: Array<{ date: string; description: string; amount: number; categoryId?: string | null; dependentId?: string | null }>
 ): { valid: ImportTransaction[]; errors: ValidationError[] } {
   const valid: ImportTransaction[] = []
   const errors: ValidationError[] = []
@@ -248,17 +251,30 @@ const importRoutes: FastifyPluginAsync = async (app) => {
         })
       }
 
-      // 4. Se checkDuplicate retorna true e force !== true → retornar 409
       const isDuplicate = await checkDuplicate(referenceMonth, getUserId(request))
-      if (isDuplicate && body.force !== true) {
-        return reply.status(409).send({
-          isDuplicate: true,
-          referenceMonth,
-        })
-      }
 
       let importRecord
-      if (isDuplicate && body.force === true) {
+      if (isDuplicate && body.force !== true) {
+        const newTransactions = await filterExistingTransactions(
+          transactionsToSave,
+          referenceMonth,
+          getUserId(request)
+        )
+
+        if (newTransactions.length === 0) {
+          if (otherMonthTransactions.length > 0) {
+            await insertStandaloneTransactions(otherMonthTransactions, getUserId(request))
+          }
+
+          return reply.status(200).send({
+            referenceMonth,
+            transactionCount: 0,
+            message: 'Nenhuma transação nova foi encontrada para importar.',
+          })
+        }
+
+        importRecord = await saveImport(newTransactions, referenceMonth, getUserId(request))
+      } else if (isDuplicate && body.force === true) {
         // 5. Se force = true → chamar overwriteImport
         importRecord = await overwriteImport(referenceMonth, transactionsToSave, getUserId(request))
       } else {

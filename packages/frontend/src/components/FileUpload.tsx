@@ -10,9 +10,14 @@ export interface FileUploadProps {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 
+function isSupportedFile(fileName: string): boolean {
+  const extension = fileName.toLowerCase().split('.').pop() ?? ''
+  return ['csv', 'xls', 'xlsx'].includes(extension)
+}
+
 /**
  * File upload component with client-side validation.
- * Accepts only .csv files up to 10 MB.
+ * Accepts CSV and Excel spreadsheet files up to 10 MB.
  */
 export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
   const [fileName, setFileName] = useState<string | null>(null)
@@ -22,9 +27,9 @@ export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
   const validateAndAccept = useCallback(
     (file: File) => {
       // Validate extension
-      if (!file.name.toLowerCase().endsWith('.csv')) {
+      if (!isSupportedFile(file.name)) {
         setFileName(null)
-        onError('Formato inválido. Por favor, envie um arquivo CSV.')
+        onError('Formato inválido. Por favor, envie um arquivo CSV ou Excel.')
         return
       }
 
@@ -85,7 +90,7 @@ export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
     <div
       role="button"
       tabIndex={0}
-      aria-label="Área de upload de arquivo CSV"
+      aria-label="Área de upload de arquivo CSV ou Excel"
       onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -105,7 +110,7 @@ export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
       <Upload className="h-10 w-10 text-gray-400" />
       <div className="text-center">
         <p className="text-sm font-medium text-gray-700">
-          Clique ou arraste um arquivo CSV aqui
+          Clique ou arraste um arquivo CSV ou Excel aqui
         </p>
         <p className="text-xs text-gray-500 mt-1">Tamanho máximo: 10 MB</p>
       </div>
@@ -119,7 +124,7 @@ export function FileUpload({ onFileAccepted, onError }: FileUploadProps) {
       <input
         ref={inputRef}
         type="file"
-        accept=".csv"
+        accept=".csv,.xls,.xlsx"
         className="hidden"
         onChange={handleChange}
         aria-hidden="true"

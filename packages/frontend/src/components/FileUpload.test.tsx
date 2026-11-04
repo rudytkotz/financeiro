@@ -10,7 +10,7 @@ function createFile(name: string, size: number, type = 'text/csv'): File {
 describe('FileUpload', () => {
   it('renders upload area with instructions', () => {
     render(<FileUpload onFileAccepted={vi.fn()} onError={vi.fn()} />)
-    expect(screen.getByText(/Clique ou arraste um arquivo CSV aqui/)).toBeInTheDocument()
+    expect(screen.getByText(/Clique ou arraste um arquivo CSV ou Excel aqui/)).toBeInTheDocument()
     expect(screen.getByText(/Tamanho máximo: 10 MB/)).toBeInTheDocument()
   })
 
@@ -39,7 +39,7 @@ describe('FileUpload', () => {
 
     fireEvent.change(input, { target: { files: [file] } })
 
-    expect(onError).toHaveBeenCalledWith('Formato inválido. Por favor, envie um arquivo CSV.')
+    expect(onError).toHaveBeenCalledWith('Formato inválido. Por favor, envie um arquivo CSV ou Excel.')
     expect(onFileAccepted).not.toHaveBeenCalled()
     expect(screen.queryByTestId('file-name')).not.toBeInTheDocument()
   })
@@ -105,19 +105,20 @@ describe('FileUpload', () => {
     expect(screen.getByTestId('file-name')).toHaveTextContent('dropped.csv')
   })
 
-  it('rejects dropped file with wrong extension', () => {
+  it('accepts a dropped .xlsx spreadsheet', () => {
     const onFileAccepted = vi.fn()
     const onError = vi.fn()
     render(<FileUpload onFileAccepted={onFileAccepted} onError={onError} />)
 
     const dropArea = screen.getByRole('button')
-    const file = createFile('data.xlsx', 2048)
+    const file = createFile('data.xlsx', 2048, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
     fireEvent.drop(dropArea, {
       dataTransfer: { files: [file] },
     })
 
-    expect(onError).toHaveBeenCalledWith('Formato inválido. Por favor, envie um arquivo CSV.')
-    expect(onFileAccepted).not.toHaveBeenCalled()
+    expect(onFileAccepted).toHaveBeenCalledWith(file)
+    expect(onError).not.toHaveBeenCalled()
+    expect(screen.getByTestId('file-name')).toHaveTextContent('data.xlsx')
   })
 })

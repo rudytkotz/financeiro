@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateReferenceMonth } from './importService.js'
+import { calculateReferenceMonth, filterExistingTransactions } from './importService.js'
 
 describe('ImportService — calculateReferenceMonth', () => {
   it('retorna o mês da data mais antiga para uma única transação', () => {
@@ -46,5 +46,28 @@ describe('ImportService — calculateReferenceMonth', () => {
       { date: '2024-01-01' },
     ])
     expect(result).toBe('2024-01')
+  })
+})
+
+describe('ImportService — filterExistingTransactions', () => {
+  it('mantém somente transações ainda não importadas para o mesmo mês', async () => {
+    const existing = [
+      { date: '2026-11-01', description: 'Mercado', amount: 5000 },
+      { date: '2026-11-03', description: 'Uber', amount: 4000 },
+    ]
+
+    const incoming = [
+      { date: '2026-11-01', description: 'Mercado', amount: 5000 },
+      { date: '2026-11-02', description: 'Farmacia', amount: 2500 },
+      { date: '2026-11-03', description: 'Uber', amount: 4000 },
+      { date: '2026-11-04', description: 'Lanche', amount: 1500 },
+    ]
+
+    const result = await filterExistingTransactions(incoming, '2026-11', 'user-1', existing)
+
+    expect(result).toEqual([
+      { date: '2026-11-02', description: 'Farmacia', amount: 2500 },
+      { date: '2026-11-04', description: 'Lanche', amount: 1500 },
+    ])
   })
 })

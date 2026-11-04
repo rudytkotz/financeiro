@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 
 export interface ParsedTransaction {
   date: string        // YYYY-MM-DD
@@ -277,6 +278,30 @@ export function parseCsvString(content: string): CsvParseResult {
  * Detects columns (data, descrição/description, valor/value) regardless of order (case-insensitive).
  */
 export async function parseCsv(file: File): Promise<CsvParseResult> {
-  const text = await file.text()
-  return parseCsvString(text)
+  const extension = file.name.toLowerCase().split('.').pop() ?? ''
+
+  if (extension === 'csv') {
+    const text = await file.text()
+    return parseCsvString(text)
+  }
+
+  if (extension === 'xls' || extension === 'xlsx') {
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' })
+    const firstSheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[firstSheetName]
+
+    if (!worksheet) {
+      return {
+        valid: [],
+        invalidCount: 0,
+        invalidReasons: [{ line: 1, reason: 'Planilha vazia ou sem dados' }],
+      }
+    }
+
+    const csv = XLSX.utils.sheet_to_csv(worksheet)
+    return parseCsvString(csv)
+  }
+
+  throw new Error('Formato de arquivo não suportado')
 }

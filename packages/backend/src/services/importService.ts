@@ -436,6 +436,52 @@ export async function filterDuplicateInstallments(transactionList: ImportTransac
   return [...nonInstallmented, ...filteredInstallmented]
 }
 
+function buildTransactionSignature(t: Pick<ImportTransaction, 'date' | 'description' | 'amount' | 'dependentId' | 'accountId' | 'installmentCurrent' | 'installmentTotal'>): string {
+  return [
+    t.date,
+    t.description.trim(),
+    String(t.amount),
+    t.dependentId ?? '',
+    t.accountId ?? '',
+    t.installmentCurrent ?? '',
+    t.installmentTotal ?? '',
+  ].join('|')
+}
+
+/**
+ * Filtra transações que já existem para o mesmo usuário e mês de referência,
+ * preservando apenas itens novos para importação incremental.
+ */
+export async function filterExistingTransactions(
+  transactionList: ImportTransaction[],
+  referenceMonth: string,
+  userId?: string,
+  existingRows?: Array<Pick<ImportTransaction, 'date' | 'description' | 'amount' | 'dependentId' | 'accountId' | 'installmentCurrent' | 'installmentTotal'>>
+): Promise<ImportTransaction[]> {
+  if (transactionList.length === 0) return transactionList
+
+  const rows = existingRows ?? await db
+    .select({
+      date: transactions.date,
+      description: transactions.description,
+      amount: transactions.amount,
+      dependentId: transactions.dependentId,
+      accountId: transactions.accountId,
+      installmentCurrent: transactions.installmentCurrent,
+      installmentTotal: transactions.installmentTotal,
+    })
+    .from(transactions)
+    .where(
+      userId
+        ? and(eq(transactions.referenceMonth, referenceMonth), eq(transactions.userId, userId))
+        : eq(transactions.referenceMonth, referenceMonth)
+    )
+
+  const existingSet = new Set(rows.map(r => buildTransactionSignature(r)))
+
+  return transactionList.filter((t) => !existingSet.has(buildTransactionSignature(t)))
+}
+
 /**
  * Sugere categorias para um conjunto de descrições com base no histórico do
  * usuário: para cada descrição, procura a categoria mais usada em transações
