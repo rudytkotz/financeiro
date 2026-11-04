@@ -31,6 +31,7 @@ function formatCents(cents: number): string {
 export interface AccountModalProps {
   /** null = criar; Account = editar */
   account: Account | null
+  defaultParentAccountId?: string | null
   open: boolean
   onClose: () => void
   onSubmit: (payload: CreateAccountPayload) => Promise<void>
@@ -41,7 +42,7 @@ export interface AccountModalProps {
   dependents?: Dependent[]
 }
 
-export default function AccountModal({ account, open, onClose, onSubmit, saving, accounts = [], dependents = [] }: AccountModalProps) {
+export default function AccountModal({ account, defaultParentAccountId = null, open, onClose, onSubmit, saving, accounts = [], dependents = [] }: AccountModalProps) {
   const [name, setName] = useState('')
   const [type, setType] = useState<AccountType>('corrente')
   const [initialBalance, setInitialBalance] = useState('0,00')
@@ -68,10 +69,10 @@ export default function AccountModal({ account, open, onClose, onSubmit, saving,
       setParentAccountId(account.parentAccountId ?? '')
       setDependentId(account.dependentId ?? '')
     } else {
-      setName(''); setType('corrente'); setInitialBalance('0,00'); setColor(null)
-      setClosingDay(''); setDueDay(''); setCreditLimit(''); setParentAccountId(''); setDependentId('')
+      setName(''); setType(defaultParentAccountId ? 'cartao' : 'corrente'); setInitialBalance('0,00'); setColor(null)
+      setClosingDay(''); setDueDay(''); setCreditLimit(''); setParentAccountId(defaultParentAccountId ?? ''); setDependentId('')
     }
-  }, [open, account])
+  }, [open, account, defaultParentAccountId])
 
   if (!open) return null
 

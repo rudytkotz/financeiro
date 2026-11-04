@@ -104,6 +104,7 @@ export function useQuotePreview(ticker: string, generic = false) {
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['investments'] })
+  qc.invalidateQueries({ queryKey: ['accounts'] })
 }
 
 export function useCreateRvInvestment() {

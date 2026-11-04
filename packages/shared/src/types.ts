@@ -181,6 +181,9 @@ export interface AccountSummary {
   investmentCount: number
   transactionCount: number
   linkedCardCount: number
+  cardUsageCurrent?: number
+  creditLimit?: number | null
+  limitUsagePct?: number | null
 }
 
 // Fatura de cartão de crédito

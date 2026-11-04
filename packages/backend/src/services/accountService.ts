@@ -20,6 +20,9 @@ export interface AccountSummary {
   investmentCount: number      // nº de ativos vinculados
   transactionCount: number     // nº total de transações vinculadas
   linkedCardCount: number      // nº de cartões filhos (contas com parentAccountId = este)
+  cardUsageCurrent: number      // uso real do cartão em despesa (centavos)
+  creditLimit: number | null   // limite do cartão (centavos)
+  limitUsagePct: number | null // % usado do cartão
 }
 
 export interface CreateAccountData {
@@ -138,7 +141,13 @@ export async function listAccounts(userId: string): Promise<AccountWithBalance[]
  */
 export async function getAccountsSummary(userId: string): Promise<AccountSummary[]> {
   const list = await db
-    .select({ id: accounts.id, initialBalance: accounts.initialBalance, parentAccountId: accounts.parentAccountId })
+    .select({
+      id: accounts.id,
+      type: accounts.type,
+      initialBalance: accounts.initialBalance,
+      parentAccountId: accounts.parentAccountId,
+      creditLimit: accounts.creditLimit,
+    })
     .from(accounts)
     .where(eq(accounts.userId, userId))
 
@@ -152,10 +161,20 @@ export async function getAccountsSummary(userId: string): Promise<AccountSummary
       count: sql<string>`COUNT(*)`,
     })
     .from(transactions)
-    .where(eq(transactions.userId, userId))
+    .where(and(eq(transactions.userId, userId), sql`${transactions.deletedAt} IS NULL`))
     .groupBy(transactions.accountId)
 
   const txByAccount = new Map(txAgg.map((t) => [t.accountId, { total: Number(t.total), count: Number(t.count) }]))
+
+  const cardUsageAgg = await db
+    .select({
+      accountId: transactions.accountId,
+      total: sql<string>`COALESCE(SUM(${transactions.amount}), 0)`,
+    })
+    .from(transactions)
+    .where(and(eq(transactions.userId, userId), eq(transactions.kind, 'despesa'), sql`${transactions.deletedAt} IS NULL`))
+    .groupBy(transactions.accountId)
+  const cardUsageByAccount = new Map(cardUsageAgg.map((t) => [t.accountId, Number(t.total)]))
 
   // Investido por conta (RV a mercado + RF aplicado) — helper compartilhado
   const investedByAccount = await getInvestedByAccount(userId)
@@ -171,6 +190,12 @@ export async function getAccountsSummary(userId: string): Promise<AccountSummary
   return list.map((acc) => {
     const tx = txByAccount.get(acc.id) ?? { total: 0, count: 0 }
     const inv = investedByAccount.get(acc.id) ?? { value: 0, count: 0 }
+    const cardUsageCurrent = acc.type === 'cartao' ? cardUsageByAccount.get(acc.id) ?? 0 : 0
+    const creditLimit = acc.type === 'cartao' ? acc.creditLimit ?? null : null
+    const limitUsagePct = creditLimit && creditLimit > 0
+      ? Math.round((cardUsageCurrent / creditLimit) * 10000) / 100
+      : null
+
     return {
       accountId: acc.id,
       currentBalance: acc.initialBalance - tx.total,
@@ -178,6 +203,9 @@ export async function getAccountsSummary(userId: string): Promise<AccountSummary
       investmentCount: inv.count,
       transactionCount: tx.count,
       linkedCardCount: linkedCardCount.get(acc.id) ?? 0,
+      cardUsageCurrent,
+      creditLimit,
+      limitUsagePct,
     }
   })
 }

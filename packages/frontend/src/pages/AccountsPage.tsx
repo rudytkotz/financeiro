@@ -4,9 +4,11 @@ import {
   useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useInvoice, useAccountsSummary,
 } from '@/hooks/useAccounts'
 import { useDependents } from '@/hooks/useDependents'
-import type { AccountSummary } from '@financeiro/shared'
+import { useInvestments, usePortfolioSummary, useUpdateRvInvestment } from '@/hooks/useInvestments'
+import type { AccountSummary, Investment } from '@financeiro/shared'
 import type { Account, CreateAccountPayload } from '@financeiro/shared'
 import AccountModal, { ACCOUNT_TYPES } from '@/components/AccountModal'
+import AccountSelect from '@/components/AccountSelect'
 import TransferModal from '@/components/TransferModal'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { cn } from '@/lib/utils'
@@ -53,14 +55,19 @@ export default function AccountsPage() {
   const { data: accounts, isLoading } = useAccounts()
   const { data: dependents } = useDependents()
   const { data: summaryList } = useAccountsSummary()
+  const { data: investments = [] } = useInvestments()
+  const { data: portfolio } = usePortfolioSummary()
   const createAccount = useCreateAccount()
   const updateAccount = useUpdateAccount()
   const deleteAccount = useDeleteAccount()
+  const updateRvInvestment = useUpdateRvInvestment()
 
   const [tab, setTab] = useState<TabKey>('overview')
   const [modalOpen, setModalOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
+  const [newCardParentId, setNewCardParentId] = useState<string | null>(null)
+  const [selectedOrphanAccounts, setSelectedOrphanAccounts] = useState<Record<string, string>>({})
   const [toDelete, setToDelete] = useState<Account | null>(null)
 
   const all = accounts ?? []
@@ -70,10 +77,7 @@ export default function AccountsPage() {
     () => new Map((summaryList ?? []).map((s) => [s.accountId, s])),
     [summaryList],
   )
-  const totalInvested = useMemo(
-    () => (summaryList ?? []).reduce((sum, s) => sum + s.investedCurrent, 0),
-    [summaryList],
-  )
+  const totalInvested = portfolio?.totalInvested ?? 0
 
   // Totais por grupo (apenas contas ativas)
   const saldoContas = useMemo(
@@ -81,10 +85,17 @@ export default function AccountsPage() {
     [active],
   )
   const cartoes = useMemo(() => active.filter((a) => a.type === 'cartao'), [active])
-  // Patrimônio exibido = saldo das contas + investido real (ativos vinculados).
-  // Não somamos o saldo manual das contas tipo "investimento" para não duplicar
-  // com o valor real dos ativos.
-  const patrimonio = saldoContas
+  const totalUsoCartoes = useMemo(
+    () => cartoes.reduce((sum, account) => sum + (summaryById.get(account.id)?.cardUsageCurrent ?? 0), 0),
+    [cartoes, summaryById],
+  )
+  const limiteTotal = useMemo(
+    () => cartoes.reduce((sum, account) => sum + (account.creditLimit ?? 0), 0),
+    [cartoes],
+  )
+  // Patrimônio exibido = saldo das contas operacionais + total investido real,
+  // incluindo investimentos sem conta vinculada.
+  const patrimonio = saldoContas + totalInvested
 
   const counts = {
     contas: active.filter((a) => TAB_TYPES.contas.includes(a.type)).length,
@@ -101,12 +112,18 @@ export default function AccountsPage() {
     ...(counts.arquivadas > 0 ? [{ key: 'arquivadas' as TabKey, label: 'Arquivadas', icon: Archive, count: counts.arquivadas }] : []),
   ]
 
-  function openCreate() { setEditing(null); setModalOpen(true) }
-  function openEdit(acc: Account) { setEditing(acc); setModalOpen(true) }
+  function openCreate() { setEditing(null); setNewCardParentId(null); setModalOpen(true) }
+  function openCreateCard(parentAccount: Account) { setEditing(null); setNewCardParentId(parentAccount.id); setModalOpen(true) }
+  function openEdit(acc: Account) { setEditing(acc); setNewCardParentId(null); setModalOpen(true) }
 
   async function handleSubmit(payload: CreateAccountPayload) {
     if (editing) await updateAccount.mutateAsync({ id: editing.id, payload })
     else await createAccount.mutateAsync(payload)
+  }
+
+  async function handleLinkInvestment(investmentId: string, accountId: string) {
+    if (!accountId) return
+    await updateRvInvestment.mutateAsync({ id: investmentId, payload: { accountId } })
   }
 
   // Lista exibida conforme a aba
@@ -164,20 +181,25 @@ export default function AccountsPage() {
         <OverviewTab
           patrimonio={patrimonio} saldoContas={saldoContas}
           totalInvested={totalInvested}
-          cartoes={cartoes} accounts={active} allAccounts={all} dependents={dependents ?? []} summaryById={summaryById} onCreate={openCreate}
-          onEdit={openEdit} onDelete={setToDelete} onArchive={(a) => updateAccount.mutate({ id: a.id, payload: { archived: true } })}
+          cartoes={cartoes} totalUsoCartoes={totalUsoCartoes} limiteTotal={limiteTotal}
+          investments={investments}
+          accounts={active} allAccounts={all} dependents={dependents ?? []} summaryById={summaryById} onCreate={openCreate}
+          selectedOrphanAccounts={selectedOrphanAccounts} setSelectedOrphanAccounts={setSelectedOrphanAccounts}
+          onLinkInvestment={handleLinkInvestment} isUpdatingInvestment={updateRvInvestment.isPending}
+          onAddCard={openCreateCard} onEdit={openEdit} onDelete={setToDelete} onArchive={(a) => updateAccount.mutate({ id: a.id, payload: { archived: true } })}
         />
       ) : (
         <AccountGrid
           accounts={visibleAccounts} allAccounts={all} dependents={dependents ?? []} summaryById={summaryById} archivedView={tab === 'arquivadas'}
-          onEdit={openEdit} onDelete={setToDelete}
+          onAddCard={openCreateCard} onEdit={openEdit} onDelete={setToDelete}
           onArchive={(a) => updateAccount.mutate({ id: a.id, payload: { archived: true } })}
           onRestore={(a) => updateAccount.mutate({ id: a.id, payload: { archived: false } })}
         />
       )}
 
       <AccountModal
-        open={modalOpen} account={editing} onClose={() => setModalOpen(false)}
+        open={modalOpen} account={editing} defaultParentAccountId={newCardParentId}
+        onClose={() => { setModalOpen(false); setNewCardParentId(null) }}
         onSubmit={handleSubmit} saving={createAccount.isPending || updateAccount.isPending}
         accounts={all} dependents={dependents ?? []}
       />
@@ -204,22 +226,29 @@ interface OverviewProps {
   saldoContas: number
   totalInvested: number
   cartoes: Account[]
+  totalUsoCartoes: number
+  limiteTotal: number
   accounts: Account[]
   allAccounts: Account[]
   dependents: import('@financeiro/shared').Dependent[]
+  investments: Investment[]
   summaryById: Map<string, AccountSummary>
+  selectedOrphanAccounts: Record<string, string>
+  setSelectedOrphanAccounts: React.Dispatch<React.SetStateAction<Record<string, string>>>
   onCreate: () => void
+  onLinkInvestment: (investmentId: string, accountId: string) => Promise<void>
+  isUpdatingInvestment: boolean
+  onAddCard: (a: Account) => void
   onEdit: (a: Account) => void
   onDelete: (a: Account) => void
   onArchive: (a: Account) => void
 }
 
-function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, accounts, allAccounts, dependents, summaryById, onCreate, onEdit, onDelete, onArchive }: OverviewProps) {
-  const limiteTotal = cartoes.reduce((s, c) => s + (c.creditLimit ?? 0), 0)
-
+function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, totalUsoCartoes, limiteTotal, accounts, allAccounts, dependents, investments, summaryById, selectedOrphanAccounts, setSelectedOrphanAccounts, onCreate, onLinkInvestment, isUpdatingInvestment, onAddCard, onEdit, onDelete, onArchive }: OverviewProps) {
   // Distribuição do saldo positivo por conta (para a barra de composição)
   const positives = accounts.filter((a) => a.currentBalance > 0 && a.type !== 'cartao')
   const totalPositive = positives.reduce((s, a) => s + a.currentBalance, 0)
+  const orphanInvestments = investments.filter((inv) => !inv.accountId)
   const palette = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#84cc16']
 
   if (accounts.length === 0) {
@@ -241,7 +270,7 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, accounts
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-l-4 border-l-primary/60 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 text-gray-400"><Wallet className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Patrimônio</span></div>
-          <p className={`mt-1.5 text-xl font-bold lg:text-2xl ${(patrimonio + totalInvested) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatCurrency(patrimonio + totalInvested)}</p>
+          <p className={`mt-1.5 text-xl font-bold lg:text-2xl ${patrimonio >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatCurrency(patrimonio)}</p>
           <p className="mt-0.5 text-[11px] text-gray-400">Contas + investimentos</p>
         </div>
         <div className="rounded-2xl border border-l-4 border-l-emerald-400 bg-white p-4 shadow-sm">
@@ -257,7 +286,12 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, accounts
         <div className="rounded-2xl border border-l-4 border-l-blue-400 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 text-gray-400"><CreditCard className="h-4 w-4" /><span className="text-xs font-semibold uppercase tracking-wider">Cartões</span></div>
           <p className="mt-1.5 text-xl font-bold text-gray-900 lg:text-2xl">{cartoes.length}</p>
-          <p className="mt-0.5 text-[11px] text-gray-400">Limite: {limiteTotal > 0 ? formatCurrency(limiteTotal) : '—'}</p>
+          <p className="mt-0.5 text-[11px] text-gray-400">
+            Limite: {limiteTotal > 0 ? formatCurrency(limiteTotal) : '—'}
+            {totalUsoCartoes > 0 && (
+              <span className="text-gray-500"> · Uso: {formatCurrency(totalUsoCartoes)}</span>
+            )}
+          </p>
         </div>
       </div>
 
@@ -284,8 +318,49 @@ function OverviewTab({ patrimonio, saldoContas, totalInvested, cartoes, accounts
         </div>
       )}
 
+      {orphanInvestments.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Investimentos sem conta</span>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{orphanInvestments.length}</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {orphanInvestments.map((inv) => {
+              const selected = selectedOrphanAccounts[inv.id] ?? ''
+              return (
+                <div key={inv.id} className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">{inv.name}</p>
+                    <p className="text-[11px] text-gray-500">
+                      {inv.ticker ?? 'Ativo'} · {inv.type === 'renda_variavel' ? 'Renda variável' : 'Renda fixa'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <AccountSelect
+                      accounts={accounts.filter((a) => a.type !== 'cartao' && a.type !== 'investimento' && !a.archived)}
+                      value={selected}
+                      onChange={(value) => setSelectedOrphanAccounts((prev) => ({ ...prev, [inv.id]: value }))}
+                      emptyLabel="Vincular a..."
+                      className="min-w-[170px] rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void onLinkInvestment(inv.id, selected)}
+                      disabled={!selected || isUpdatingInvestment}
+                      className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Vincular
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Todas as contas */}
-      <AccountGrid accounts={accounts} allAccounts={allAccounts} dependents={dependents} summaryById={summaryById} archivedView={false} onEdit={onEdit} onDelete={onDelete} onArchive={onArchive} onRestore={() => {}} />
+      <AccountGrid accounts={accounts} allAccounts={allAccounts} dependents={dependents} summaryById={summaryById} archivedView={false} onAddCard={onAddCard} onEdit={onEdit} onDelete={onDelete} onArchive={onArchive} onRestore={() => {}} />
     </div>
   )
 }
@@ -299,13 +374,14 @@ interface GridProps {
   dependents: import('@financeiro/shared').Dependent[]
   summaryById: Map<string, AccountSummary>
   archivedView: boolean
+  onAddCard: (a: Account) => void
   onEdit: (a: Account) => void
   onDelete: (a: Account) => void
   onArchive: (a: Account) => void
   onRestore: (a: Account) => void
 }
 
-function AccountGrid({ accounts, allAccounts, dependents, summaryById, archivedView, onEdit, onDelete, onArchive, onRestore }: GridProps) {
+function AccountGrid({ accounts, allAccounts, dependents, summaryById, archivedView, onAddCard, onEdit, onDelete, onArchive, onRestore }: GridProps) {
   if (accounts.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-gray-400">
@@ -328,7 +404,7 @@ function AccountGrid({ accounts, allAccounts, dependents, summaryById, archivedV
           <AccountCard key={acc.id} account={acc} archivedView={archivedView}
             linkedCards={linkedCards} parentAccount={parent} ownerName={ownerName}
             summary={summaryById.get(acc.id) ?? null}
-            onEdit={() => onEdit(acc)} onDelete={() => onDelete(acc)}
+            onAddCard={() => onAddCard(acc)} onEdit={() => onEdit(acc)} onDelete={() => onDelete(acc)}
             onArchive={() => onArchive(acc)} onRestore={() => onRestore(acc)} />
         )
       })}
@@ -343,13 +419,14 @@ interface CardProps {
   parentAccount: Account | null
   ownerName: string | null
   summary: AccountSummary | null
+  onAddCard: () => void
   onEdit: () => void
   onDelete: () => void
   onArchive: () => void
   onRestore: () => void
 }
 
-function AccountCard({ account, archivedView, linkedCards, parentAccount, ownerName, summary, onEdit, onDelete, onArchive, onRestore }: CardProps) {
+function AccountCard({ account, archivedView, linkedCards, parentAccount, ownerName, summary, onAddCard, onEdit, onDelete, onArchive, onRestore }: CardProps) {
   const navigate = useNavigate()
   const info = typeInfo(account.type)
   const Icon = info.icon
@@ -390,7 +467,7 @@ function AccountCard({ account, archivedView, linkedCards, parentAccount, ownerN
       </p>
 
       {/* Investimentos vinculados a esta conta */}
-      {summary && summary.investedCurrent > 0 && (
+      {summary && (summary.investedCurrent > 0 || summary.investmentCount > 0) && (
         <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50 px-2.5 py-1.5">
           <span className="flex items-center gap-1.5 text-[11px] font-medium text-amber-700">
             <TrendingUp className="h-3.5 w-3.5" /> Investido
@@ -416,15 +493,26 @@ function AccountCard({ account, archivedView, linkedCards, parentAccount, ownerN
       )}
 
       {!archivedView && (
-        <button
-          onClick={() => navigate('/transactions', { state: { accountId: account.id } })}
-          className="mt-3 inline-flex items-center gap-1 self-start text-[11px] font-medium text-primary hover:underline"
-        >
-          <ExternalLink className="h-3 w-3" /> Ver transações
-          {summary && summary.transactionCount > 0 && (
-            <span className="text-gray-400">({summary.transactionCount})</span>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {account.type !== 'cartao' && (
+            <button
+              type="button"
+              onClick={onAddCard}
+              className="inline-flex items-center gap-1 rounded-lg border border-primary/20 bg-primary/5 px-2 py-1 text-[10px] font-semibold text-primary hover:bg-primary/10"
+            >
+              <Plus className="h-3 w-3" /> Adicionar cartão
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => navigate('/transactions', { state: { accountId: account.id } })}
+            className="inline-flex items-center gap-1 self-start text-[11px] font-medium text-primary hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" /> Ver transações
+            {summary && summary.transactionCount > 0 && (
+              <span className="text-gray-400">({summary.transactionCount})</span>
+            )}
+          </button>
+        </div>
       )}
     </div>
   )
@@ -463,7 +551,9 @@ function InvoicePanel({ account }: { account: Account }) {
             <span className="text-gray-400">Fecha {invoice.closingDate.split('-').reverse().slice(0, 2).join('/')}</span>
             <span className="text-gray-400">Vence {invoice.dueDate.split('-').reverse().slice(0, 2).join('/')}</span>
           </div>
-          {invoice.limitUsagePct !== null && (
+          {invoice.limitUsagePct === null ? (
+            <p className="pt-1 text-[10px] text-amber-600">Sem limite definido.</p>
+          ) : (
             <div className="pt-1">
               <div className="mb-1 flex justify-between text-[11px]">
                 <span className="text-gray-500">Limite usado</span>
